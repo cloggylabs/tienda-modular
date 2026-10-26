@@ -15,8 +15,7 @@
     {
       "binding": "DB",
       "database_name": "tienda-modular",
-      // Reemplazar con el id que imprime `npx wrangler d1 create tienda-modular`
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "b36e4f7a-9323-4f2d-bdca-68ac51857692",
       "migrations_dir": "db/migrations"
     }
   ],
@@ -30,7 +29,7 @@
         {
           "binding": "DB",
           "database_name": "tienda-modular",
-          "database_id": "00000000-0000-0000-0000-000000000000",
+          "database_id": "b36e4f7a-9323-4f2d-bdca-68ac51857692",
           "migrations_dir": "db/migrations"
         }
       ]
