@@ -1,0 +1,101 @@
+---
+import Icon from './Icon.astro';
+import { instagramUrl, whatsappUrl } from '../../modules/tiendas/settings';
+
+const store = Astro.locals.store!;
+const { settings } = store;
+---
+
+<header class="nav">
+  <a class="wordmark" href="/">{store.name}</a>
+  {
+    settings.nav.length > 0 && (
+      <nav aria-label="Principal" class="links">
+        {settings.nav.map((l) => <a href={l.href}>{l.label}</a>)}
+      </nav>
+    )
+  }
+  <div class="pills">
+    {
+      settings.instagram && (
+        <a class="pill" href={instagramUrl(settings)} target="_blank" rel="noopener" aria-label="Instagram">
+          <Icon name="instagram" size={16} />
+          <span>Instagram</span>
+        </a>
+      )
+    }
+    <a class="pill" href={whatsappUrl(settings)} target="_blank" rel="noopener" aria-label="WhatsApp">
+      <Icon name="whatsapp" size={16} /><span>WhatsApp</span>
+    </a>
+  </div>
+</header>
+
+<style>
+  .nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-16);
+    padding: var(--spacing-16);
+    background: var(--color-canvas);
+    border-bottom: 1px solid var(--color-ink);
+  }
+  .wordmark {
+    font-family: var(--font-display);
+    font-variant-ligatures: var(--ligatures-display);
+    font-size: 30px;
+    font-weight: var(--font-weight-medium);
+    font-style: var(--accent-style);
+    letter-spacing: -0.02em;
+    line-height: 1;
+    text-decoration: none;
+  }
+  .links {
+    display: none;
+    gap: var(--spacing-30);
+    margin-left: auto;
+  }
+  .links a {
+    text-decoration: none;
+  }
+  .links a:hover {
+    text-decoration: underline;
+    text-underline-offset: 4px;
+  }
+  .pills {
+    display: flex;
+    gap: var(--spacing-8);
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-8);
+    padding: var(--spacing-8) var(--spacing-12);
+    border: 1px solid var(--color-ink);
+    border-radius: var(--radius-pills);
+    background: var(--color-canvas);
+    font-size: 14px;
+    text-decoration: none;
+    line-height: 1;
+  }
+  .pill:hover {
+    background: var(--color-surface);
+  }
+  .pill span {
+    display: none;
+  }
+  @media (min-width: 560px) {
+    .pill span {
+      display: inline;
+    }
+  }
+  @media (min-width: 900px) {
+    .nav {
+      padding: var(--spacing-20) var(--spacing-60);
+    }
+    .links {
+      display: flex;
+      margin-right: var(--spacing-20);
+    }
+  }
+</style>

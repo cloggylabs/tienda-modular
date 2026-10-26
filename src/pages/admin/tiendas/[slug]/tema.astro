@@ -1,0 +1,497 @@
+---
+import '@fontsource/ibm-plex-serif/400.css';
+import '@fontsource/ibm-plex-serif/700.css';
+import '@fontsource/cormorant-garamond/500.css';
+import '@fontsource/cormorant-garamond/500-italic.css';
+import '@fontsource/inter/400.css';
+import '@fontsource/pixelify-sans/400.css';
+import '@fontsource/pixelify-sans/700.css';
+import '@fontsource/rubik/400.css';
+import '@fontsource/rubik/700.css';
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import Errors from '../../../../components/admin/Errors.astro';
+import { getDb } from '../../../../lib/db';
+import { getStoreBySlug, updateTheme } from '../../../../modules/tiendas/repo';
+import { ARTELICAT_THEME, DEFAULT_THEME, POCHI_THEME } from '../../../../modules/tema/defaults';
+import {
+  ART_OPTIONS,
+  COLOR_KEYS,
+  COLOR_LABELS,
+  FONT_ROLE_LABELS,
+  FONT_ROLES,
+  FONTS,
+  LIMITS,
+  contrastReport,
+  themeVars,
+  validateTheme,
+  type Theme,
+} from '../../../../modules/tema/theme';
+
+const db = getDb();
+const store = await getStoreBySlug(db, Astro.params.slug!);
+if (!store) return new Response(null, { status: 404 });
+
+const ORIGINAL: Record<string, Theme> = { artelicat: ARTELICAT_THEME, 'pochi-craft-3d': POCHI_THEME };
+const original = ORIGINAL[store.slug] ?? DEFAULT_THEME;
+
+const stored = validateTheme(store.theme);
+let theme: Theme = stored.ok ? stored.theme : original;
+let errors: string[] = [];
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  if (form.get('action') === 'reset') {
+    await updateTheme(db, store.id, original);
+    return Astro.redirect(`/admin/tiendas/${store.slug}/tema?restaurado=1`);
+  }
+  const candidate = {
+    colors: Object.fromEntries(COLOR_KEYS.map((k) => [k, String(form.get(`color.${k}`) ?? '')])),
+    fonts: Object.fromEntries(FONT_ROLES.map((r) => [r, String(form.get(`font.${r}`) ?? '')])),
+    shape: { radiusButtons: form.get('radiusButtons'), radiusImages: form.get('radiusImages') },
+    type: {
+      displayTracking: form.get('displayTracking'),
+      displayLeading: form.get('displayLeading'),
+      italicAccent: form.get('italicAccent') === 'on',
+    },
+    art: String(form.get('art') ?? ''),
+  };
+  const result = validateTheme(candidate);
+  if (result.ok) {
+    await updateTheme(db, store.id, result.theme);
+    return Astro.redirect(`/admin/tiendas/${store.slug}/tema?guardado=1`);
+  }
+  errors = result.errors;
+  // Conserva lo que la persona escribió para que pueda corregirlo.
+  theme = { ...theme, ...(candidate as unknown as Theme) };
+}
+
+const ok = Astro.url.searchParams.has('guardado')
+  ? 'Tema guardado. Ya se ve en la tienda.'
+  : Astro.url.searchParams.has('restaurado')
+    ? 'Se restauró el tema original.'
+    : null;
+
+const safe = validateTheme(theme);
+const previewTheme = safe.ok ? safe.theme : original;
+const previewStyle = Object.entries(themeVars(previewTheme))
+  .map(([k, v]) => `${k}:${v}`)
+  .join(';');
+const report = contrastReport(previewTheme);
+---
+
+<AdminLayout title={`Tema de ${store.name}`} current={store.slug} section="tema">
+  <div class="stack">
+    <h1>Tema y colores</h1>
+    <p class="muted">Los cambios se ven aquí al instante y en la tienda cuando guardas.</p>
+  </div>
+  <Errors errors={errors} ok={ok} />
+
+  <div class="layout">
+    <form method="post" class="stack" id="theme-form">
+      <section class="card">
+        <h2>Colores</h2>
+        {
+          COLOR_KEYS.map((k) => (
+            <div class="color-row">
+              <input type="color" value={theme.colors[k]} data-sync={k} aria-label={`${COLOR_LABELS[k].label} (selector)`} />
+              <label class="field">
+                <span>{COLOR_LABELS[k].label}</span>
+                <input
+                  type="text"
+                  name={`color.${k}`}
+                  value={theme.colors[k]}
+                  data-color={k}
+                  pattern="#[0-9a-fA-F]{6}"
+                  maxlength="7"
+                  required
+                />
+                <small>{COLOR_LABELS[k].help}</small>
+              </label>
+            </div>
+          ))
+        }
+      </section>
+
+      <section class="card">
+        <h2>Tipografía</h2>
+        {
+          FONT_ROLES.map((r) => (
+            <label class="field">
+              <span>{FONT_ROLE_LABELS[r]}</span>
+              <select name={`font.${r}`} data-font={r}>
+                {Object.entries(FONTS).map(([key, f]) => (
+                  <option value={key} selected={theme.fonts[r] === key}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))
+        }
+        <div class="grid-2">
+          <label class="field">
+            <span>Espaciado de titulares (em)</span>
+            <input
+              type="number"
+              name="displayTracking"
+              value={theme.type.displayTracking}
+              min={LIMITS.displayTracking[0]}
+              max={LIMITS.displayTracking[1]}
+              step="0.005"
+              data-num="--tracking-display"
+              data-unit="em"
+            />
+          </label>
+          <label class="field">
+            <span>Interlineado de titulares</span>
+            <input
+              type="number"
+              name="displayLeading"
+              value={theme.type.displayLeading}
+              min={LIMITS.displayLeading[0]}
+              max={LIMITS.displayLeading[1]}
+              step="0.05"
+              data-num="--leading-display"
+              data-unit=""
+            />
+          </label>
+        </div>
+        <label class="check">
+          <input type="checkbox" name="italicAccent" checked={theme.type.italicAccent} data-italic />
+          Segunda línea del titular en cursiva
+        </label>
+      </section>
+
+      <section class="card">
+        <h2>Forma e ilustración</h2>
+        <div class="grid-2">
+          <label class="field">
+            <span>Radio de botones (px)</span>
+            <input
+              type="number"
+              name="radiusButtons"
+              value={theme.shape.radiusButtons}
+              min={LIMITS.radiusButtons[0]}
+              max={LIMITS.radiusButtons[1]}
+              data-num="--radius-buttons"
+              data-unit="px"
+            />
+          </label>
+          <label class="field">
+            <span>Radio de imágenes (px)</span>
+            <input
+              type="number"
+              name="radiusImages"
+              value={theme.shape.radiusImages}
+              min={LIMITS.radiusImages[0]}
+              max={LIMITS.radiusImages[1]}
+              data-num="--radius-images"
+              data-unit="px"
+            />
+          </label>
+        </div>
+        <label class="field">
+          <span>Ilustración de la portada</span>
+          <select name="art">
+            {Object.entries(ART_OPTIONS).map(([key, label]) => (
+              <option value={key} selected={theme.art === key}>
+                {label}
+              </option>
+            ))}
+          </select>
+          <small>Se muestra en la portada mientras no haya fotografías.</small>
+        </label>
+      </section>
+
+      <div class="row">
+        <button class="button" type="submit">Guardar tema</button>
+        <button class="button secondary" type="submit" name="action" value="reset" formnovalidate data-confirm>
+          Restaurar tema original
+        </button>
+      </div>
+    </form>
+
+    <aside class="preview-col">
+      <div class="preview" id="preview" style={previewStyle} data-fonts={JSON.stringify(FONTS)}>
+        <div class="p-nav">
+          <span class="p-wordmark">{store.name}</span>
+          <span class="p-pill">WhatsApp</span>
+        </div>
+        <div class="p-band">
+          <p class="p-badge">✦ Vista previa ✦</p>
+          <p class="p-display">
+            Hecho a mano,<span class="p-accent">en pequeñas tandas.</span>
+          </p>
+          <p class="p-body">Así se ve el texto de lectura sobre la banda de marca.</p>
+          <div class="p-actions">
+            <span class="p-btn p-primary">Pedir ahora</span>
+            <span class="p-btn">Ver catálogo</span>
+          </div>
+        </div>
+        <div class="p-split">
+          <div class="p-img">Foto</div>
+          <div>
+            <p class="p-heading">Sección</p>
+            <p class="p-body">Texto sobre el fondo de la tienda.</p>
+            <span class="p-chip">Bre-B</span>
+          </div>
+        </div>
+        <div class="p-season">
+          <p class="p-heading">Temporada</p>
+          <p class="p-body">Promo con fecha.</p>
+        </div>
+      </div>
+
+      <div class="card contrast">
+        <h2>Legibilidad (contraste WCAG)</h2>
+        <ul id="contrast">
+          {
+            report.map((r) => (
+              <li data-fg={r.fg} data-bg={r.bg} data-min={r.min} class:list={{ bad: !r.ok }}>
+                <span>{r.label}</span>
+                <strong>{r.ratio.toFixed(1)}:1</strong>
+              </li>
+            ))
+          }
+        </ul>
+        <small class="muted">Mínimo recomendado: 4.5:1. Los pares en rojo pueden costar leerse.</small>
+      </div>
+    </aside>
+  </div>
+</AdminLayout>
+
+<script>
+  import { contrastRatio } from '../../../../modules/tema/theme';
+
+  const form = document.getElementById('theme-form') as HTMLFormElement;
+  const preview = document.getElementById('preview') as HTMLElement;
+  const fonts = JSON.parse(preview.dataset.fonts!) as Record<string, { stack: string }>;
+  const HEX = /^#[0-9a-f]{6}$/i;
+  const cssVar: Record<string, string> = {
+    ink: '--color-ink',
+    canvas: '--color-canvas',
+    surface: '--color-surface',
+    band: '--color-band',
+    season: '--color-season',
+    onSeason: '--color-on-season',
+    cta: '--color-cta',
+    accent: '--color-accent',
+  };
+
+  const colorValue = (key: string) =>
+    (form.querySelector<HTMLInputElement>(`[data-color="${key}"]`)?.value ?? '').trim();
+
+  function updateContrast() {
+    document.querySelectorAll<HTMLLIElement>('#contrast li').forEach((li) => {
+      const fg = colorValue(li.dataset.fg!);
+      const bg = colorValue(li.dataset.bg!);
+      if (!HEX.test(fg) || !HEX.test(bg)) return;
+      const ratio = contrastRatio(fg, bg);
+      li.querySelector('strong')!.textContent = `${ratio.toFixed(1)}:1`;
+      li.classList.toggle('bad', ratio < Number(li.dataset.min));
+    });
+  }
+
+  form.addEventListener('input', (event) => {
+    const el = event.target as HTMLInputElement | HTMLSelectElement;
+
+    // Selector de color ↔ campo hexadecimal
+    if (el instanceof HTMLInputElement && el.dataset.sync) {
+      const text = form.querySelector<HTMLInputElement>(`[data-color="${el.dataset.sync}"]`)!;
+      text.value = el.value;
+      preview.style.setProperty(cssVar[el.dataset.sync]!, el.value);
+    }
+    if (el instanceof HTMLInputElement && el.dataset.color && HEX.test(el.value.trim())) {
+      const picker = form.querySelector<HTMLInputElement>(`[data-sync="${el.dataset.color}"]`)!;
+      picker.value = el.value.trim().toLowerCase();
+      preview.style.setProperty(cssVar[el.dataset.color]!, el.value.trim());
+    }
+    if (el instanceof HTMLSelectElement && el.dataset.font) {
+      const stack = fonts[el.value]?.stack;
+      if (stack) preview.style.setProperty(`--font-${el.dataset.font}`, stack);
+    }
+    if (el instanceof HTMLInputElement && el.dataset.num) {
+      preview.style.setProperty(el.dataset.num, `${el.value}${el.dataset.unit ?? ''}`);
+      if (el.dataset.num === '--radius-buttons') preview.style.setProperty('--radius-inputs', `${el.value}px`);
+    }
+    if (el instanceof HTMLInputElement && 'italic' in el.dataset) {
+      preview.style.setProperty('--accent-style', el.checked ? 'italic' : 'normal');
+    }
+    updateContrast();
+  });
+
+  form.querySelector<HTMLButtonElement>('[data-confirm]')?.addEventListener('click', (event) => {
+    if (!confirm('¿Restaurar el tema original? Se perderán los cambios de colores y tipografía.')) {
+      event.preventDefault();
+    }
+  });
+</script>
+
+<style>
+  .layout {
+    display: grid;
+    gap: 24px;
+    align-items: start;
+  }
+  .color-row {
+    display: grid;
+    grid-template-columns: 48px 1fr;
+    gap: 12px;
+    align-items: start;
+  }
+  input[type='color'] {
+    width: 48px;
+    height: 48px;
+    margin-top: 22px;
+    padding: 0;
+    border: 1px solid var(--a-line);
+    border-radius: 8px;
+    background: none;
+    cursor: pointer;
+  }
+  .preview-col {
+    display: grid;
+    gap: 16px;
+  }
+  .contrast ul {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .contrast li {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 14px;
+  }
+  .contrast li.bad {
+    color: var(--a-err);
+  }
+  .contrast li.bad strong::after {
+    content: ' ⚠';
+  }
+
+  /* --- Vista previa con las variables del tema --- */
+  .preview {
+    overflow: hidden;
+    border: 1px solid var(--a-line);
+    border-radius: var(--a-radius);
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-variant-ligatures: var(--ligatures-body);
+  }
+  .p-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--color-ink);
+  }
+  .p-wordmark {
+    font-family: var(--font-display);
+    font-variant-ligatures: var(--ligatures-display);
+    font-size: 22px;
+    font-style: var(--accent-style);
+  }
+  .p-pill,
+  .p-chip {
+    padding: 4px 10px;
+    border: 1px solid var(--color-ink);
+    border-radius: 999px;
+    font-size: 12px;
+  }
+  .p-chip {
+    display: inline-block;
+    margin-top: 8px;
+    background: var(--color-surface);
+  }
+  .p-band {
+    display: grid;
+    gap: 10px;
+    padding: 24px 16px;
+    background: var(--color-band);
+  }
+  .p-badge {
+    font-family: var(--font-badge);
+    font-variant-ligatures: var(--ligatures-badge);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .p-display {
+    font-family: var(--font-display);
+    font-variant-ligatures: var(--ligatures-display);
+    font-size: 40px;
+    font-weight: 500;
+    line-height: var(--leading-display);
+    letter-spacing: var(--tracking-display);
+  }
+  .p-accent {
+    display: block;
+    font-style: var(--accent-style);
+  }
+  .p-heading {
+    font-family: var(--font-display);
+    font-variant-ligatures: var(--ligatures-display);
+    font-size: 26px;
+    line-height: var(--leading-display);
+    letter-spacing: var(--tracking-display);
+  }
+  .p-body {
+    font-size: 14px;
+  }
+  .p-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .p-btn {
+    padding: 10px 14px;
+    border: 1px solid var(--color-ink);
+    border-radius: var(--radius-buttons);
+    font-size: 13px;
+  }
+  .p-primary {
+    background: var(--color-cta);
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  .p-split {
+    display: grid;
+    grid-template-columns: 90px 1fr;
+    gap: 14px;
+    align-items: center;
+    padding: 20px 16px;
+  }
+  .p-img {
+    display: grid;
+    place-items: end start;
+    aspect-ratio: 4 / 5;
+    padding: 8px;
+    border-radius: var(--radius-images);
+    background: linear-gradient(160deg, var(--color-accent), var(--color-surface));
+    font-family: var(--font-display);
+    font-variant-ligatures: var(--ligatures-display);
+    font-size: 14px;
+  }
+  .p-season {
+    padding: 20px 16px;
+    background: var(--color-season);
+    color: var(--color-on-season);
+    text-align: center;
+  }
+
+  @media (min-width: 1000px) {
+    .layout {
+      grid-template-columns: minmax(0, 1fr) 360px;
+    }
+    .preview-col {
+      position: sticky;
+      top: 24px;
+    }
+  }
+</style>

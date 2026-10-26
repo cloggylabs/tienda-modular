@@ -1,0 +1,116 @@
+---
+import Badge from '../../../components/store/Badge.astro';
+import Icon from '../../../components/store/Icon.astro';
+import SmartLink from '../../../components/store/SmartLink.astro';
+import type { HowToBuyProps } from '../blocks';
+
+type Props = HowToBuyProps;
+const { anchor, badge, title, steps, cta } = Astro.props;
+const store = Astro.locals.store!;
+---
+
+<section id={anchor} class="how band">
+  <div class="head">
+    {badge && <Badge>{badge}</Badge>}
+    <h2 class="heading">{title}</h2>
+  </div>
+
+  <ol>
+    {
+      steps.map((step, i) => (
+        <li>
+          <span class="num">{String(i + 1).padStart(2, '0')}</span>
+          <h3 class="heading-sm">{step.title}</h3>
+          <p>{step.body}</p>
+        </li>
+      ))
+    }
+  </ol>
+
+  {
+    store.settings.payments.length > 0 && (
+      <div class="pay">
+        <p class="label">Aceptamos</p>
+        <ul>
+          {store.settings.payments.map((p) => (
+            <li>{p}</li>
+          ))}
+        </ul>
+        <p class="label">Precios en pesos colombianos ({store.currency}).</p>
+      </div>
+    )
+  }
+
+  <SmartLink class="btn btn-primary" link={cta}>
+    {cta.to === 'whatsapp' && <Icon name="whatsapp" />}
+    {cta.label}
+  </SmartLink>
+</section>
+
+<style>
+  .how {
+    display: grid;
+    justify-items: center;
+    gap: var(--spacing-48);
+    text-align: center;
+  }
+  .head {
+    display: grid;
+    justify-items: center;
+    gap: var(--spacing-16);
+  }
+  ol {
+    display: grid;
+    gap: var(--spacing-36);
+    max-width: 1100px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  ol li {
+    display: grid;
+    justify-items: center;
+    gap: var(--spacing-12);
+    max-width: 340px;
+  }
+  .num {
+    font-family: var(--font-badge);
+    font-variant-ligatures: var(--ligatures-badge);
+    font-size: var(--text-badge);
+    padding: var(--spacing-8) var(--spacing-12);
+    border: 1px solid var(--color-ink);
+    border-radius: var(--radius-pills);
+    line-height: 1;
+  }
+  .pay {
+    display: grid;
+    justify-items: center;
+    gap: var(--spacing-12);
+  }
+  .label {
+    font-size: var(--text-caption);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .pay ul {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--spacing-8);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .pay li {
+    padding: var(--spacing-8) var(--spacing-16);
+    border: 1px solid var(--color-ink);
+    border-radius: var(--radius-pills);
+    background: var(--color-surface);
+  }
+  @media (min-width: 900px) {
+    ol {
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--spacing-60);
+    }
+  }
+</style>

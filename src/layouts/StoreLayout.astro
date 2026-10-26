@@ -1,0 +1,72 @@
+---
+// Layout de la tienda pública: carga todas las tipografías disponibles (el navegador solo
+// descarga las que el tema usa) e inyecta el tema de la tienda como variables CSS.
+import '@fontsource/ibm-plex-serif/400.css';
+import '@fontsource/ibm-plex-serif/500.css';
+import '@fontsource/ibm-plex-serif/700.css';
+import '@fontsource/cormorant-garamond/500.css';
+import '@fontsource/cormorant-garamond/500-italic.css';
+import '@fontsource/inter/400.css';
+import '@fontsource/pixelify-sans/400.css';
+import '@fontsource/pixelify-sans/500.css';
+import '@fontsource/pixelify-sans/700.css';
+import '@fontsource/rubik/400.css';
+import '@fontsource/rubik/500.css';
+import '@fontsource/rubik/700.css';
+import '../styles/store.css';
+import Nav from '../components/store/Nav.astro';
+import Footer from '../components/store/Footer.astro';
+import { themeToCss, validateTheme } from '../modules/tema/theme';
+import { DEFAULT_THEME } from '../modules/tema/defaults';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+
+const store = Astro.locals.store!;
+const { title = store.tagline ? `${store.name} — ${store.tagline}` : store.name, description = store.description } =
+  Astro.props;
+
+// El tema ya se valida al guardarlo; se valida otra vez aquí porque termina dentro de un <style>.
+const checked = validateTheme(store.theme);
+const theme = checked.ok ? checked.theme : DEFAULT_THEME;
+const themeCss = themeToCss(theme);
+const canonical = new URL(Astro.url.pathname, Astro.url.origin);
+---
+
+<!doctype html>
+<html lang={store.locale}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content={theme.colors.band} />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content={store.locale.replace('-', '_')} />
+    <meta property="og:site_name" content={store.name} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <style set:html={themeCss}></style>
+  </head>
+  <body>
+    {
+      Astro.locals.isPreview && (
+        <div class="preview-bar" role="status">
+          <span>Vista previa de {store.name}</span>
+          <a href="/?tienda=salir">Salir de la vista previa</a>
+          <a href="/admin">Volver al panel</a>
+        </div>
+      )
+    }
+    <Nav />
+    <main>
+      <slot />
+    </main>
+    <Footer />
+  </body>
+</html>

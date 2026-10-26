@@ -1,0 +1,74 @@
+---
+// Pila de bloques isométricos que "se construye" al cargar (Pochi Craft 3D). Usa los colores del tema.
+interface Props {
+  class?: string;
+}
+const { class: className } = Astro.props;
+
+// Coordenadas de rejilla (x, y, z) de cada bloque, de abajo hacia arriba.
+const cubes: [number, number, number][] = [
+  [0, 0, 0], [1, 0, 0], [2, 0, 0],
+  [0, 1, 0], [1, 1, 0], [2, 1, 0],
+  [0, 2, 0], [1, 2, 0],
+  [0, 0, 1], [1, 0, 1], [0, 1, 1],
+  [0, 0, 2],
+];
+const S = 30; // lado del bloque
+const iso = (x: number, y: number, z: number) => ({
+  px: 160 + (x - y) * S * 0.866,
+  py: 150 + (x + y) * S * 0.5 - z * S,
+});
+// Orden de pintado: los de atrás y abajo primero.
+const sorted = [...cubes].sort((a, b) => a[2] - b[2] || a[0] + a[1] - (b[0] + b[1]));
+const w = S * 0.866;
+const h = S * 0.5;
+---
+
+<svg class:list={['voxels', className]} viewBox="0 0 320 300" role="img" aria-label="Pila de bloques impresos en 3D">
+  {
+    sorted.map(([x, y, z], i) => {
+      const { px, py } = iso(x, y, z);
+      const top = `${px},${py - h} ${px + w},${py} ${px},${py + h} ${px - w},${py}`;
+      const left = `${px - w},${py} ${px},${py + h} ${px},${py + h + S} ${px - w},${py + S}`;
+      const right = `${px + w},${py} ${px},${py + h} ${px},${py + h + S} ${px + w},${py + S}`;
+      return (
+        <g class="cube" style={`--i:${i}`}>
+          <polygon class="top" points={top} />
+          <polygon class="left" points={left} />
+          <polygon class="right" points={right} />
+        </g>
+      );
+    })
+  }
+</svg>
+
+<style>
+  .voxels {
+    width: 100%;
+    height: auto;
+  }
+  polygon {
+    stroke: var(--color-ink);
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+  }
+  .top {
+    fill: var(--color-accent);
+  }
+  .left {
+    fill: var(--color-surface);
+  }
+  .right {
+    fill: color-mix(in srgb, var(--color-surface) 70%, var(--color-ink));
+  }
+  .cube {
+    animation: drop 0.45s cubic-bezier(0.3, 1.4, 0.5, 1) both;
+    animation-delay: calc(var(--i) * 90ms);
+  }
+  @keyframes drop {
+    from {
+      opacity: 0;
+      transform: translateY(-40px);
+    }
+  }
+</style>

@@ -1,0 +1,169 @@
+/* Panel de administración: neutro a propósito, para no competir con el tema de ninguna tienda. */
+:root {
+  --a-bg: #f6f5f3;
+  --a-panel: #ffffff;
+  --a-ink: #1f1d1a;
+  --a-muted: #6b665e;
+  --a-line: #e3e0da;
+  --a-accent: #3d5afe;
+  --a-accent-ink: #ffffff;
+  --a-ok-bg: #e7f4ea;
+  --a-ok: #1e6b34;
+  --a-err-bg: #fdecea;
+  --a-err: #a1261b;
+  --a-radius: 10px;
+  color-scheme: light;
+}
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--a-bg);
+  color: var(--a-ink);
+  font: 15px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+a {
+  color: inherit;
+}
+h1,
+h2,
+h3 {
+  margin: 0;
+  line-height: 1.2;
+}
+h1 {
+  font-size: 24px;
+}
+h2 {
+  font-size: 17px;
+}
+p {
+  margin: 0;
+}
+.muted {
+  color: var(--a-muted);
+}
+.stack {
+  display: grid;
+  gap: 16px;
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.card {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  background: var(--a-panel);
+  border: 1px solid var(--a-line);
+  border-radius: var(--a-radius);
+}
+.field {
+  display: grid;
+  gap: 6px;
+}
+.field > span {
+  font-weight: 600;
+  font-size: 14px;
+}
+.field small {
+  color: var(--a-muted);
+  font-size: 13px;
+}
+input[type='text'],
+input[type='email'],
+input[type='password'],
+input[type='number'],
+input[type='url'],
+textarea,
+select {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--a-line);
+  border-radius: 8px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+}
+textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+input:focus,
+textarea:focus,
+select:focus {
+  outline: 2px solid var(--a-accent);
+  outline-offset: 0;
+  border-color: transparent;
+}
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border: 1px solid var(--a-ink);
+  border-radius: 8px;
+  background: var(--a-ink);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.button.secondary {
+  background: transparent;
+  color: var(--a-ink);
+}
+.button.link {
+  border-color: transparent;
+  background: transparent;
+  color: var(--a-muted);
+  padding-inline: 0;
+  font-weight: 500;
+}
+.alert {
+  padding: 12px 14px;
+  border-radius: 8px;
+}
+.alert ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.alert.ok {
+  background: var(--a-ok-bg);
+  color: var(--a-ok);
+}
+.alert.error {
+  background: var(--a-err-bg);
+  color: var(--a-err);
+}
+.grid-2 {
+  display: grid;
+  gap: 16px;
+}
+@media (min-width: 720px) {
+  .grid-2 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.auth {
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  padding: 16px;
+}
+.auth .card {
+  width: min(400px, 100%);
+}

@@ -1,0 +1,211 @@
+/* Estilos de la tienda pública. Los colores, fuentes y radios llegan del tema de cada tienda
+   (variables --color-*, --font-*, --radius-*), inyectadas en el <head> por StoreLayout. */
+:root {
+  --text-caption: 12px;
+  --text-body: 16px;
+  --text-body-lg: 18px;
+  --text-subheading: 20px;
+  --text-badge: 13px;
+  --text-heading-sm: clamp(34px, 6vw, 46px);
+  --text-heading: clamp(46px, 8vw, 72px);
+  --text-heading-lg: clamp(56px, 11vw, 102px);
+  --text-display: clamp(60px, 13vw, 120px);
+  --leading-body: 1.5;
+
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-bold: 700;
+
+  --spacing-4: 4px;
+  --spacing-8: 8px;
+  --spacing-10: 10px;
+  --spacing-12: 12px;
+  --spacing-16: 16px;
+  --spacing-20: 20px;
+  --spacing-24: 24px;
+  --spacing-30: 30px;
+  --spacing-36: 36px;
+  --spacing-48: 48px;
+  --spacing-60: 60px;
+  --spacing-100: 100px;
+
+  --section-gap: 64px;
+  --element-gap: 20px;
+  --radius-pills: 9999px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-variant-ligatures: var(--ligatures-body);
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-variant-ligatures: var(--ligatures-display);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--leading-display);
+  text-wrap: balance;
+}
+
+p {
+  margin: 0;
+  text-wrap: pretty;
+}
+
+:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* Titulares */
+.display {
+  font-size: var(--text-display);
+  letter-spacing: var(--tracking-display);
+}
+.heading-lg {
+  font-size: var(--text-heading-lg);
+  letter-spacing: var(--tracking-display);
+}
+.heading {
+  font-size: var(--text-heading);
+  letter-spacing: var(--tracking-display);
+}
+.heading-sm {
+  font-size: var(--text-heading-sm);
+  letter-spacing: calc(var(--tracking-display) * 0.7);
+  line-height: 1;
+}
+.accent-line {
+  display: block;
+  font-style: var(--accent-style);
+}
+
+.body-lg {
+  font-size: var(--text-body-lg);
+  line-height: 1.4;
+}
+
+/* Botones */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-10);
+  padding: var(--spacing-20) var(--spacing-30);
+  border-radius: var(--radius-buttons);
+  border: 1px solid var(--color-ink);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-variant-ligatures: var(--ligatures-body);
+  font-size: var(--text-body);
+  text-decoration: none;
+  cursor: pointer;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
+.btn:hover {
+  transform: translateY(-1px);
+}
+.btn-primary {
+  background: var(--color-cta);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.btn-ghost {
+  background: transparent;
+  font-weight: var(--font-weight-medium);
+}
+.btn-ghost:hover {
+  background: var(--color-canvas);
+}
+
+.text-link {
+  font-weight: var(--font-weight-medium);
+  text-underline-offset: 4px;
+}
+
+/* Bandas editoriales a sangre */
+.band {
+  padding: var(--section-gap) var(--spacing-30);
+}
+.band-brand {
+  background: var(--color-band);
+}
+.band-surface {
+  background: var(--color-surface);
+}
+.band-season {
+  background: var(--color-season);
+  color: var(--color-on-season);
+}
+
+.preview-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--spacing-12);
+  padding: var(--spacing-8) var(--spacing-16);
+  background: var(--color-ink);
+  color: var(--color-canvas);
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+}
+
+@media (min-width: 900px) {
+  .band {
+    padding: var(--spacing-100) var(--spacing-60);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

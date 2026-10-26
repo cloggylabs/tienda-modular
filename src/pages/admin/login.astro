@@ -1,0 +1,53 @@
+---
+import '../../styles/admin.css';
+import { attemptLogin, createSession } from '../../lib/auth';
+import { getDb } from '../../lib/db';
+
+// Solo se permite volver a rutas internas del panel.
+const rawBack = Astro.url.searchParams.get('volver') ?? '/admin';
+const back = rawBack.startsWith('/admin') && !rawBack.startsWith('//') ? rawBack : '/admin';
+
+if (Astro.locals.user) return Astro.redirect(back);
+
+const errors: string[] = [];
+let email = '';
+
+if (Astro.request.method === 'POST') {
+  const db = getDb();
+  const form = await Astro.request.formData();
+  email = String(form.get('email') ?? '');
+  const result = await attemptLogin(db, email, String(form.get('password') ?? ''));
+  if (result.ok) {
+    await createSession(db, Astro.cookies, result.user.id, Astro.url.protocol === 'https:');
+    return Astro.redirect(back);
+  }
+  errors.push(result.error);
+}
+---
+
+<!doctype html>
+<html lang="es-CO">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Iniciar sesión · Panel</title>
+  </head>
+  <body>
+    <main class="auth">
+      <form class="card" method="post">
+        <h1>Panel de tiendas</h1>
+        {errors.length > 0 && <div class="alert error" role="alert">{errors[0]}</div>}
+        <label class="field">
+          <span>Correo</span>
+          <input type="email" name="email" value={email} required autocomplete="email" autofocus />
+        </label>
+        <label class="field">
+          <span>Contraseña</span>
+          <input type="password" name="password" required autocomplete="current-password" />
+        </label>
+        <button class="button" type="submit">Entrar</button>
+      </form>
+    </main>
+  </body>
+</html>

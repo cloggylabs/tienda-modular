@@ -1,0 +1,50 @@
+---
+import StoreLayout from '../layouts/StoreLayout.astro';
+import Badge from '../components/store/Badge.astro';
+
+// En /admin no hay tienda activa: se muestra una página simple del panel.
+const store = Astro.locals.store;
+Astro.response.status = 404;
+---
+
+{
+  store ? (
+    <StoreLayout title={`Página no encontrada — ${store.name}`}>
+      <section class="band band-brand not-found">
+        <Badge>Error 404</Badge>
+        <h1 class="heading-lg">Esta página no existe.</h1>
+        <a class="btn btn-ghost" href="/">
+          Volver al inicio
+        </a>
+      </section>
+    </StoreLayout>
+  ) : (
+    <html lang="es-CO">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="robots" content="noindex" />
+        <title>No encontrado · Panel</title>
+        <style>
+          body { display: grid; place-items: center; min-height: 100vh; margin: 0; font: 15px/1.5 system-ui, sans-serif; background: #f6f5f3; color: #1f1d1a; }
+        </style>
+      </head>
+      <body>
+        <p>
+          Esta página del panel no existe. <a href="/admin">Volver al panel</a>
+        </p>
+      </body>
+    </html>
+  )
+}
+
+<style>
+  .not-found {
+    display: grid;
+    justify-items: center;
+    align-content: center;
+    gap: var(--spacing-24);
+    min-height: 70vh;
+    text-align: center;
+  }
+</style>

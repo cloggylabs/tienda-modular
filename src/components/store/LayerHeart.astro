@@ -1,0 +1,57 @@
+---
+// Corazón "impreso capa por capa" (Artelicat). Usa los colores del tema.
+interface Props {
+  class?: string;
+}
+const { class: className } = Astro.props;
+const layers = Array.from({ length: 22 }, (_, i) => i);
+const heart =
+  'M100 172C44 128 8 98 8 56 8 26 31 6 58 6c18 0 33 9 42 24C109 15 124 6 142 6c27 0 50 20 50 50 0 42-36 72-92 116Z';
+---
+
+<svg class:list={['heart', className]} viewBox="0 0 200 180" role="img" aria-label="Corazón hecho de capas de impresión 3D">
+  <defs>
+    <clipPath id="heart-clip"><path d={heart} /></clipPath>
+  </defs>
+  <g clip-path="url(#heart-clip)">
+    <rect width="200" height="180" fill="var(--color-accent)" />
+    {
+      layers.map((i) => (
+        <rect
+          x="0"
+          y={i * 8}
+          width="200"
+          height="5"
+          class:list={['layer', i % 2 === 0 ? 'a' : 'b']}
+          style={`--i:${i}`}
+        />
+      ))
+    }
+  </g>
+  <path d={heart} fill="none" stroke="var(--color-ink)" stroke-width="1.5" />
+</svg>
+
+<style>
+  .heart {
+    width: 100%;
+    height: auto;
+  }
+  .a {
+    fill: var(--color-band);
+    filter: brightness(1.08);
+  }
+  .b {
+    fill: color-mix(in srgb, var(--color-band) 75%, var(--color-ink));
+  }
+  .layer {
+    transform-box: fill-box;
+    transform-origin: left;
+    animation: print 0.5s ease-out both;
+    animation-delay: calc((21 - var(--i)) * 45ms);
+  }
+  @keyframes print {
+    from {
+      transform: scaleX(0);
+    }
+  }
+</style>

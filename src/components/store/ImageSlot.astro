@@ -1,0 +1,41 @@
+---
+// Foto de producto con el radio del tema. Sin `src` muestra un marcador con franjas de capa.
+interface Props {
+  src?: string;
+  alt: string;
+  label?: string;
+}
+const { src, alt, label } = Astro.props;
+---
+
+{
+  src ? (
+    <img class="slot" src={src} alt={alt} loading="lazy" decoding="async" />
+  ) : (
+    <div class="slot placeholder" role="img" aria-label={alt}>
+      <span>{label ?? alt}</span>
+    </div>
+  )
+}
+
+<style>
+  .slot {
+    width: 100%;
+    aspect-ratio: 4 / 5;
+    object-fit: cover;
+    border-radius: var(--radius-images);
+  }
+  .placeholder {
+    display: grid;
+    place-items: end start;
+    padding: var(--spacing-24);
+    background:
+      repeating-linear-gradient(0deg, transparent 0 10px, rgb(255 255 255 / 0.18) 10px 14px),
+      linear-gradient(160deg, var(--color-accent), var(--color-surface));
+    font-family: var(--font-display);
+    font-variant-ligatures: var(--ligatures-display);
+    font-size: 32px;
+    font-style: var(--accent-style);
+    line-height: 1;
+  }
+</style>

@@ -1,0 +1,172 @@
+---
+import '../styles/admin.css';
+import { getDb } from '../lib/db';
+import { listStores } from '../modules/tiendas/repo';
+
+interface Props {
+  title: string;
+  /** slug de la tienda activa en el menú */
+  current?: string;
+  section?: 'general' | 'tema';
+}
+const { title, current, section } = Astro.props;
+const user = Astro.locals.user!;
+const stores = await listStores(getDb());
+---
+
+<!doctype html>
+<html lang="es-CO">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>{title} · Panel</title>
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="side">
+        <a class="brand" href="/admin">Panel de tiendas</a>
+        <nav aria-label="Tiendas">
+          {
+            stores.map((s) => (
+              <div class:list={['store', { active: s.slug === current }]}>
+                <a class="store-name" href={`/admin/tiendas/${s.slug}`}>
+                  <span class="dot" style={`background:${s.theme.colors.band}`} />
+                  {s.name}
+                </a>
+                {s.slug === current && (
+                  <ul>
+                    <li>
+                      <a href={`/admin/tiendas/${s.slug}`} aria-current={section === 'general' ? 'page' : undefined}>
+                        Ajustes generales
+                      </a>
+                    </li>
+                    <li>
+                      <a href={`/admin/tiendas/${s.slug}/tema`} aria-current={section === 'tema' ? 'page' : undefined}>
+                        Tema y colores
+                      </a>
+                    </li>
+                    <li>
+                      <a href={`/?tienda=${s.slug}`} target="_blank" rel="noopener">
+                        Ver tienda ↗
+                      </a>
+                    </li>
+                  </ul>
+                )}
+              </div>
+            ))
+          }
+        </nav>
+        <p class="soon muted">Próximamente: contenido, catálogo, colecciones y pedidos.</p>
+        <form method="post" action="/admin/logout" class="who">
+          <span>{user.name}</span>
+          <button class="button link" type="submit">Cerrar sesión</button>
+        </form>
+      </aside>
+      <main class="main">
+        <slot />
+      </main>
+    </div>
+  </body>
+</html>
+
+<style>
+  .shell {
+    display: grid;
+    min-height: 100vh;
+  }
+  .side {
+    display: grid;
+    align-content: start;
+    gap: 20px;
+    padding: 20px;
+    border-bottom: 1px solid var(--a-line);
+    background: var(--a-panel);
+  }
+  .brand {
+    font-weight: 700;
+    text-decoration: none;
+  }
+  nav {
+    display: grid;
+    gap: 4px;
+  }
+  .store-name {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .store.active .store-name,
+  .store-name:hover {
+    background: var(--a-bg);
+  }
+  .dot {
+    width: 12px;
+    height: 12px;
+    border: 1px solid rgb(0 0 0 / 0.25);
+    border-radius: 50%;
+  }
+  ul {
+    display: grid;
+    gap: 2px;
+    margin: 4px 0 8px;
+    padding: 0 0 0 32px;
+    list-style: none;
+  }
+  ul a {
+    display: block;
+    padding: 4px 0;
+    color: var(--a-muted);
+    text-decoration: none;
+  }
+  ul a:hover,
+  ul a[aria-current='page'] {
+    color: var(--a-ink);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .soon {
+    font-size: 13px;
+  }
+  .who {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding-top: 16px;
+    border-top: 1px solid var(--a-line);
+    font-size: 14px;
+  }
+  .main {
+    display: grid;
+    align-content: start;
+    gap: 20px;
+    width: 100%;
+    max-width: 1100px;
+    padding: 24px 16px 64px;
+  }
+  @media (min-width: 900px) {
+    .shell {
+      grid-template-columns: 260px 1fr;
+    }
+    .side {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      border-right: 1px solid var(--a-line);
+      border-bottom: 0;
+      grid-template-rows: auto auto auto 1fr;
+    }
+    .who {
+      align-self: end;
+    }
+    .main {
+      padding: 32px 40px 80px;
+    }
+  }
+</style>

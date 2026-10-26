@@ -1,0 +1,39 @@
+// Un solo código, dos workers: cada tienda se publica en su propio subdominio gratuito *.workers.dev
+// y ambas comparten la misma base de datos D1. Con dominio propio, la tienda se resuelve por hostname
+// (tabla store_domains) y DEFAULT_STORE queda solo como respaldo.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "artelicat",
+  "main": "@astrojs/cloudflare/entrypoints/server",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+  "vars": {
+    "DEFAULT_STORE": "artelicat"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "tienda-modular",
+      // Reemplazar con el id que imprime `npx wrangler d1 create tienda-modular`
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "db/migrations"
+    }
+  ],
+  "env": {
+    "pochi": {
+      "name": "pochi-craft-3d",
+      "vars": {
+        "DEFAULT_STORE": "pochi-craft-3d"
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "tienda-modular",
+          "database_id": "00000000-0000-0000-0000-000000000000",
+          "migrations_dir": "db/migrations"
+        }
+      ]
+    }
+  }
+}

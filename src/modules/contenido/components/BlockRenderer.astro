@@ -1,0 +1,36 @@
+---
+// Pinta los bloques de una página en orden. Un tipo desconocido se omite en lugar de romper la página.
+import type { Block } from '../../../db/schema';
+import { isPromoActive, type BlockPropsByType } from '../blocks';
+import Hero from './Hero.astro';
+import Promo from './Promo.astro';
+import Split from './Split.astro';
+import Keywords from './Keywords.astro';
+import HowToBuy from './HowToBuy.astro';
+
+interface Props {
+  blocks: Block[];
+}
+const { blocks } = Astro.props;
+---
+
+{
+  blocks.map((block) => {
+    switch (block.type) {
+      case 'hero':
+        return <Hero {...(block.props as BlockPropsByType['hero'])} />;
+      case 'promo': {
+        const props = block.props as BlockPropsByType['promo'];
+        return isPromoActive(props) ? <Promo {...props} /> : null;
+      }
+      case 'split':
+        return <Split {...(block.props as BlockPropsByType['split'])} />;
+      case 'keywords':
+        return <Keywords {...(block.props as BlockPropsByType['keywords'])} />;
+      case 'how_to_buy':
+        return <HowToBuy {...(block.props as BlockPropsByType['how_to_buy'])} />;
+      default:
+        return null;
+    }
+  })
+}

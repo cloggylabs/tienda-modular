@@ -1,0 +1,55 @@
+---
+import type { KeywordsProps } from '../blocks';
+
+type Props = KeywordsProps;
+const { label, words } = Astro.props;
+---
+
+<section class="cluster band band-brand" aria-label={label}>
+  <ul>
+    {
+      words.map((w) => (
+        <li class:list={[w.size, { circled: w.circled }]} style={`--r:${Number(w.rotate ?? 0)}deg`}>
+          {w.text}
+        </li>
+      ))
+    }
+  </ul>
+</section>
+
+<style>
+  ul {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: var(--spacing-16) var(--spacing-36);
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0;
+    list-style: none;
+  }
+  li {
+    font-family: var(--font-display);
+    font-variant-ligatures: var(--ligatures-display);
+    font-weight: var(--font-weight-medium);
+    line-height: 1;
+    letter-spacing: calc(var(--tracking-display) * 0.7);
+    transform: rotate(var(--r));
+  }
+  .sm {
+    font-size: clamp(30px, 5vw, 46px);
+  }
+  .md {
+    font-size: clamp(38px, 6.5vw, 60px);
+    font-style: var(--accent-style);
+  }
+  .lg {
+    font-size: clamp(46px, 8vw, 72px);
+  }
+  .circled {
+    padding: 0.1em 0.45em 0.2em;
+    border: 1px solid var(--color-ink);
+    border-radius: 50%;
+  }
+</style>

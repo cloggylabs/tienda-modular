@@ -1,0 +1,33 @@
+---
+import Badge from '../../../components/store/Badge.astro';
+import SmartLink from '../../../components/store/SmartLink.astro';
+import type { PromoProps } from '../blocks';
+
+type Props = PromoProps;
+const { badge, title, body, cta } = Astro.props;
+---
+
+<section class="promo band band-season">
+  {badge && <Badge>{badge}</Badge>}
+  <h2 class="heading-lg">{title}</h2>
+  {body && <p class="body-lg">{body}</p>}
+  <SmartLink class="btn btn-primary" link={cta}>{cta.label}</SmartLink>
+</section>
+
+<style>
+  .promo {
+    display: grid;
+    justify-items: center;
+    gap: var(--spacing-24);
+    text-align: center;
+  }
+  h2 {
+    max-width: 14ch;
+  }
+  .body-lg {
+    max-width: 560px;
+  }
+  .promo :global(.btn-primary) {
+    border-color: var(--color-on-season);
+  }
+</style>

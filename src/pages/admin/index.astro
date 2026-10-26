@@ -1,0 +1,66 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { getDb } from '../../lib/db';
+import { getDomains, listStores } from '../../modules/tiendas/repo';
+
+const db = getDb();
+const stores = await listStores(db);
+const domains = await Promise.all(stores.map((s) => getDomains(db, s.id)));
+const user = Astro.locals.user!;
+---
+
+<AdminLayout title="Inicio">
+  <div class="stack">
+    <h1>Hola, {user.name.split(' ')[0]}</h1>
+    <p class="muted">Elige una tienda para editar sus datos, su tema o ver cómo se ve.</p>
+  </div>
+  <div class="grid-2">
+    {
+      stores.map((s, i) => (
+        <article class="card">
+          <div class="swatches" aria-hidden="true">
+            {(['band', 'canvas', 'surface', 'cta', 'accent', 'ink'] as const).map((k) => (
+              <span style={`background:${s.theme.colors[k]}`} />
+            ))}
+          </div>
+          <div class="stack">
+            <h2>{s.name}</h2>
+            <p class="muted">{s.tagline}</p>
+            <p class="muted">
+              {domains[i]!.length
+                ? `Dominio: ${domains[i]![0]!.hostname}`
+                : 'Sin dominio propio todavía (se usa el subdominio gratuito de Cloudflare).'}
+            </p>
+          </div>
+          <div class="row">
+            <a class="button" href={`/admin/tiendas/${s.slug}`}>
+              Ajustes
+            </a>
+            <a class="button secondary" href={`/admin/tiendas/${s.slug}/tema`}>
+              Tema
+            </a>
+            <a class="button link" href={`/?tienda=${s.slug}`} target="_blank" rel="noopener">
+              Ver tienda ↗
+            </a>
+          </div>
+        </article>
+      ))
+    }
+  </div>
+</AdminLayout>
+
+<style>
+  .swatches {
+    display: flex;
+    height: 36px;
+    overflow: hidden;
+    border: 1px solid var(--a-line);
+    border-radius: 8px;
+  }
+  .swatches span {
+    flex: 1;
+  }
+  .swatches span:first-child {
+    flex: 3;
+  }
+</style>

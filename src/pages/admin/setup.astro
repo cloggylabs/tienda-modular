@@ -1,0 +1,93 @@
+---
+// Crea la primera cuenta del panel. Solo funciona con el SETUP_TOKEN del worker
+// y mientras no exista ninguna cuenta; después responde 404.
+import { env } from 'cloudflare:workers';
+import { count } from 'drizzle-orm';
+import '../../styles/admin.css';
+import Errors from '../../components/admin/Errors.astro';
+import { adminUsers } from '../../db/schema';
+import { createSession, hashPassword, normalizeEmail, validatePassword } from '../../lib/auth';
+import { getDb } from '../../lib/db';
+
+const db = getDb();
+const existing = (await db.select({ n: count() }).from(adminUsers).get())?.n ?? 0;
+const expected = env.SETUP_TOKEN;
+if (existing > 0 || !expected) {
+  return new Response(null, { status: 404 });
+}
+
+const errors: string[] = [];
+let token = Astro.url.searchParams.get('token') ?? '';
+let name = '';
+let email = '';
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  token = String(form.get('token') ?? '');
+  name = String(form.get('name') ?? '').trim();
+  email = normalizeEmail(String(form.get('email') ?? ''));
+  const password = String(form.get('password') ?? '');
+  const confirm = String(form.get('confirm') ?? '');
+
+  if (token !== expected) errors.push('El código de configuración no es correcto.');
+  if (!name) errors.push('Escribe tu nombre.');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.push('Escribe un correo válido.');
+  const pwError = validatePassword(password);
+  if (pwError) errors.push(pwError);
+  if (password !== confirm) errors.push('Las contraseñas no coinciden.');
+
+  if (!errors.length) {
+    const user = await db
+      .insert(adminUsers)
+      .values({ name, email, passwordHash: await hashPassword(password) })
+      .returning()
+      .get();
+    await createSession(db, Astro.cookies, user.id, Astro.url.protocol === 'https:');
+    return Astro.redirect('/admin');
+  }
+}
+---
+
+<!doctype html>
+<html lang="es-CO">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Configuración inicial · Panel</title>
+  </head>
+  <body>
+    <main class="auth">
+      <form class="card" method="post">
+        <div class="stack">
+          <h1>Crea tu cuenta del panel</h1>
+          <p class="muted">Esta pantalla solo aparece una vez. Con esta cuenta administrarás todas las tiendas.</p>
+        </div>
+        <Errors errors={errors} />
+        <label class="field">
+          <span>Código de configuración</span>
+          <input type="password" name="token" value={token} required autocomplete="off" />
+          <small>Es el valor de SETUP_TOKEN.</small>
+        </label>
+        <label class="field">
+          <span>Nombre</span>
+          <input type="text" name="name" value={name} required autocomplete="name" />
+        </label>
+        <label class="field">
+          <span>Correo</span>
+          <input type="email" name="email" value={email} required autocomplete="email" />
+        </label>
+        <label class="field">
+          <span>Contraseña</span>
+          <input type="password" name="password" required minlength="10" autocomplete="new-password" />
+          <small>Mínimo 10 caracteres.</small>
+        </label>
+        <label class="field">
+          <span>Repite la contraseña</span>
+          <input type="password" name="confirm" required minlength="10" autocomplete="new-password" />
+        </label>
+        <button class="button" type="submit">Crear cuenta</button>
+      </form>
+    </main>
+  </body>
+</html>

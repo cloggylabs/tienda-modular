@@ -1,0 +1,15 @@
+---
+// Enlace a WhatsApp, Instagram o una URL, según el bloque. Los externos abren en otra pestaña.
+import type { LinkTarget } from '../../modules/contenido/blocks';
+import { resolveLink } from './links';
+
+interface Props {
+  link: LinkTarget;
+  class?: string;
+}
+const { link, class: className } = Astro.props;
+const settings = Astro.locals.store!.settings;
+const { href, external } = resolveLink(link, settings);
+---
+
+<a class={className} href={href} {...external ? { target: '_blank', rel: 'noopener' } : {}}><slot /></a>

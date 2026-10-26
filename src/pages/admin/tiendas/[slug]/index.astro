@@ -1,0 +1,196 @@
+---
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import Errors from '../../../../components/admin/Errors.astro';
+import { getDb } from '../../../../lib/db';
+import { getDomains, getStoreBySlug, parseDomains, setDomains, updateGeneral } from '../../../../modules/tiendas/repo';
+import { PAYMENT_OPTIONS, validateSettings, type NavLink } from '../../../../modules/tiendas/settings';
+
+const db = getDb();
+const store = await getStoreBySlug(db, Astro.params.slug!);
+if (!store) return new Response(null, { status: 404 });
+
+const NAV_ROWS = 5;
+let errors: string[] = [];
+let values = {
+  name: store.name,
+  tagline: store.tagline,
+  description: store.description,
+  settings: store.settings,
+  domains: (await getDomains(db, store.id))
+    .sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary))
+    .map((d) => d.hostname)
+    .join('\n'),
+};
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const text = (key: string) => String(form.get(key) ?? '').trim();
+  const nav: NavLink[] = Array.from({ length: NAV_ROWS }, (_, i) => ({
+    label: text(`nav.${i}.label`),
+    href: text(`nav.${i}.href`),
+  }));
+  const settingsResult = validateSettings({
+    whatsapp: text('whatsapp'),
+    whatsappMessage: text('whatsappMessage'),
+    instagram: text('instagram'),
+    payments: form.getAll('payments').map(String),
+    nav,
+    legalNotice: text('legalNotice'),
+    footerNote: text('footerNote'),
+  });
+  const domainResult = parseDomains(text('domains'));
+
+  values = {
+    name: text('name'),
+    tagline: text('tagline'),
+    description: text('description'),
+    settings: settingsResult.ok
+      ? settingsResult.settings
+      : {
+          ...store.settings,
+          whatsapp: text('whatsapp'),
+          whatsappMessage: text('whatsappMessage'),
+          instagram: text('instagram'),
+          payments: form.getAll('payments').map(String),
+          nav: nav.filter((l) => l.label || l.href),
+          legalNotice: text('legalNotice'),
+          footerNote: text('footerNote'),
+        },
+    domains: text('domains'),
+  };
+
+  if (!values.name) errors.push('El nombre de la tienda es obligatorio.');
+  if (values.description.length > 300) errors.push('La descripción para buscadores debe tener máximo 300 caracteres.');
+  if (!settingsResult.ok) errors.push(...settingsResult.errors);
+  errors.push(...domainResult.errors);
+
+  if (!errors.length && settingsResult.ok) {
+    errors = await setDomains(db, store.id, domainResult.hostnames);
+    if (!errors.length) {
+      await updateGeneral(db, store.id, {
+        name: values.name,
+        tagline: values.tagline,
+        description: values.description,
+        settings: settingsResult.settings,
+      });
+      return Astro.redirect(`/admin/tiendas/${store.slug}?guardado=1`);
+    }
+  }
+}
+
+const ok = Astro.url.searchParams.has('guardado') ? 'Cambios guardados. Ya se ven en la tienda.' : null;
+const navRows = Array.from({ length: NAV_ROWS }, (_, i) => values.settings.nav[i] ?? { label: '', href: '' });
+---
+
+<AdminLayout title={`Ajustes de ${store.name}`} current={store.slug} section="general">
+  <div class="stack">
+    <h1>Ajustes generales</h1>
+    <p class="muted">Nombre, contacto, métodos de pago y textos fijos de {store.name}.</p>
+  </div>
+  <Errors errors={errors} ok={ok} />
+
+  <form method="post" class="stack">
+    <section class="card">
+      <h2>Identidad</h2>
+      <label class="field">
+        <span>Nombre de la tienda</span>
+        <input type="text" name="name" value={values.name} required maxlength="80" />
+      </label>
+      <label class="field">
+        <span>Frase corta</span>
+        <input type="text" name="tagline" value={values.tagline} maxlength="120" />
+        <small>Aparece en el título de la pestaña y en el footer.</small>
+      </label>
+      <label class="field">
+        <span>Descripción para buscadores y redes</span>
+        <textarea name="description" maxlength="300">{values.description}</textarea>
+        <small>Máximo 300 caracteres. Es el texto que muestran Google y WhatsApp al compartir el enlace.</small>
+      </label>
+    </section>
+
+    <section class="card">
+      <h2>Contacto</h2>
+      <div class="grid-2">
+        <label class="field">
+          <span>WhatsApp</span>
+          <input type="text" name="whatsapp" value={values.settings.whatsapp} inputmode="numeric" required />
+          <small>Con indicativo de país y sin espacios, ej. 573001234567.</small>
+        </label>
+        <label class="field">
+          <span>Instagram</span>
+          <input type="text" name="instagram" value={values.settings.instagram} />
+          <small>Solo el usuario, sin @. Déjalo vacío si aún no hay cuenta.</small>
+        </label>
+      </div>
+      <label class="field">
+        <span>Mensaje inicial de WhatsApp</span>
+        <input type="text" name="whatsappMessage" value={values.settings.whatsappMessage} maxlength="200" />
+        <small>Texto que aparece escrito cuando alguien toca un botón de WhatsApp.</small>
+      </label>
+    </section>
+
+    <section class="card">
+      <h2>Métodos de pago</h2>
+      <div class="row">
+        {
+          PAYMENT_OPTIONS.map((p) => (
+            <label class="check">
+              <input type="checkbox" name="payments" value={p} checked={values.settings.payments.includes(p)} />
+              {p}
+            </label>
+          ))
+        }
+      </div>
+      <small class="muted">Se muestran en la sección «Cómo comprar». La pasarela en línea llegará en una fase posterior.</small>
+    </section>
+
+    <section class="card">
+      <h2>Menú superior</h2>
+      <p class="muted">Usa #seccion para saltar a una parte de la página de inicio, /ruta o una dirección https://.</p>
+      {
+        navRows.map((l, i) => (
+          <div class="grid-2">
+            <label class="field">
+              <span>Texto {i + 1}</span>
+              <input type="text" name={`nav.${i}.label`} value={l.label} maxlength="30" />
+            </label>
+            <label class="field">
+              <span>Enlace {i + 1}</span>
+              <input type="text" name={`nav.${i}.href`} value={l.href} />
+            </label>
+          </div>
+        ))
+      }
+    </section>
+
+    <section class="card">
+      <h2>Footer</h2>
+      <label class="field">
+        <span>Aviso legal</span>
+        <textarea name="legalNotice">{values.settings.legalNotice}</textarea>
+        <small>Recomendado: aclarar que la tienda es independiente y no está afiliada a las marcas que la inspiran.</small>
+      </label>
+      <label class="field">
+        <span>Nota final</span>
+        <input type="text" name="footerNote" value={values.settings.footerNote} maxlength="80" />
+      </label>
+    </section>
+
+    <section class="card">
+      <h2>Dominios</h2>
+      <label class="field">
+        <span>Dominios de esta tienda</span>
+        <textarea name="domains" placeholder="artelicat.com&#10;www.artelicat.com">{values.domains}</textarea>
+        <small>
+          Uno por línea; el primero es el principal. Mientras no tengas dominio propio puedes dejarlo vacío: cada tienda
+          responde en su propio subdominio gratuito de Cloudflare.
+        </small>
+      </label>
+    </section>
+
+    <div class="row">
+      <button class="button" type="submit">Guardar cambios</button>
+      <a class="button link" href={`/?tienda=${store.slug}`} target="_blank" rel="noopener">Ver tienda ↗</a>
+    </div>
+  </form>
+</AdminLayout>

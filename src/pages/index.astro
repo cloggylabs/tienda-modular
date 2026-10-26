@@ -1,0 +1,13 @@
+---
+import StoreLayout from '../layouts/StoreLayout.astro';
+import BlockRenderer from '../modules/contenido/components/BlockRenderer.astro';
+import { getPageBlocks } from '../modules/contenido/repo';
+import { getDb } from '../lib/db';
+
+const store = Astro.locals.store!;
+const blocks = await getPageBlocks(getDb(), store.id, 'home');
+---
+
+<StoreLayout>
+  <BlockRenderer blocks={blocks} />
+</StoreLayout>

@@ -1,0 +1,79 @@
+---
+import Badge from '../../../components/store/Badge.astro';
+import Icon from '../../../components/store/Icon.astro';
+import ImageSlot from '../../../components/store/ImageSlot.astro';
+import SmartLink from '../../../components/store/SmartLink.astro';
+import type { SplitProps } from '../blocks';
+
+type Props = SplitProps;
+const { anchor, badge, title, body, items, link, image, reverse = false, tone = 'canvas' } = Astro.props;
+---
+
+<section id={anchor} class:list={['split band', { reverse, 'band-surface': tone === 'surface' }]}>
+  <div class="text">
+    {badge && <Badge>{badge}</Badge>}
+    <h2 class="heading">{title}</h2>
+    {body && <p class="body-lg">{body}</p>}
+    {
+      items.length > 0 && (
+        <ul>
+          {items.map((item) => (
+            <li>{item}</li>
+          ))}
+        </ul>
+      )
+    }
+    <SmartLink class="text-link" link={link}>{link.label} <Icon name="arrow" size={16} /></SmartLink>
+  </div>
+  <div class="media">
+    <ImageSlot {...image} />
+  </div>
+</section>
+
+<style>
+  .split {
+    display: grid;
+    gap: var(--spacing-36);
+    align-items: center;
+  }
+  .text {
+    display: grid;
+    gap: var(--element-gap);
+    max-width: 480px;
+  }
+  ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border-top: 1px solid var(--color-ink);
+  }
+  li {
+    padding: var(--spacing-10) 0;
+    border-bottom: 1px solid var(--color-ink);
+  }
+  .text :global(.text-link) {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-8);
+    width: fit-content;
+  }
+  .media {
+    max-width: 520px;
+  }
+  @media (min-width: 900px) {
+    .split {
+      grid-template-columns: 1fr 1fr;
+      gap: var(--spacing-60);
+    }
+    .text {
+      justify-self: center;
+    }
+    .reverse .text {
+      order: 2;
+    }
+    .media {
+      justify-self: center;
+      width: 100%;
+    }
+  }
+</style>

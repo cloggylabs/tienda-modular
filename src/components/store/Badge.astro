@@ -1,0 +1,19 @@
+---
+// Micro-etiqueta en mayúsculas flanqueada por glifos. Solo para estados y rótulos cortos.
+---
+
+<p class="badge"><span aria-hidden="true">✦</span><slot /><span aria-hidden="true">✦</span></p>
+
+<style>
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-10);
+    font-family: var(--font-badge);
+    font-variant-ligatures: var(--ligatures-badge);
+    font-size: var(--text-badge);
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+</style>

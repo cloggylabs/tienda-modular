@@ -1,0 +1,21 @@
+---
+interface Props {
+  errors?: string[];
+  ok?: string | null;
+}
+const { errors = [], ok } = Astro.props;
+---
+
+{
+  errors.length > 0 && (
+    <div class="alert error" role="alert">
+      <strong>No se pudo guardar.</strong>
+      <ul>
+        {errors.map((e) => (
+          <li>{e}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+{ok && errors.length === 0 && <div class="alert ok" role="status">{ok}</div>}

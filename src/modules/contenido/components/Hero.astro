@@ -1,0 +1,74 @@
+---
+import Badge from '../../../components/store/Badge.astro';
+import Icon from '../../../components/store/Icon.astro';
+import SmartLink from '../../../components/store/SmartLink.astro';
+import LayerHeart from '../../../components/store/LayerHeart.astro';
+import VoxelStack from '../../../components/store/VoxelStack.astro';
+import { validateTheme } from '../../tema/theme';
+import type { HeroProps } from '../blocks';
+
+type Props = HeroProps;
+const { badge, title, titleAccent, body, primary, secondary } = Astro.props;
+const checked = validateTheme(Astro.locals.store!.theme);
+const art = checked.ok ? checked.theme.art : 'none';
+---
+
+<section class:list={['hero band band-brand', { 'no-art': art === 'none' }]}>
+  <div class="copy">
+    {badge && <Badge>{badge}</Badge>}
+    <h1 class="display">
+      {title}
+      {titleAccent && <span class="accent-line">{titleAccent}</span>}
+    </h1>
+    {body && <p class="body-lg">{body}</p>}
+    <div class="actions">
+      <SmartLink class="btn btn-primary" link={primary}>{primary.label}</SmartLink>
+      {
+        secondary && (
+          <SmartLink class="btn btn-ghost" link={secondary}>
+            {secondary.to === 'instagram' && <Icon name="instagram" />}
+            {secondary.label}
+          </SmartLink>
+        )
+      }
+    </div>
+  </div>
+  {art === 'layer-heart' && <LayerHeart class="art" />}
+  {art === 'voxel-stack' && <VoxelStack class="art" />}
+</section>
+
+<style>
+  .hero {
+    display: grid;
+    gap: var(--spacing-48);
+    align-items: end;
+    min-height: min(88vh, 820px);
+  }
+  .copy {
+    display: grid;
+    gap: var(--spacing-24);
+    max-width: 760px;
+  }
+  .body-lg {
+    max-width: 520px;
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-12);
+    margin-top: var(--spacing-8);
+  }
+  .art {
+    max-width: 280px;
+    justify-self: center;
+  }
+  @media (min-width: 900px) {
+    .hero:not(.no-art) {
+      grid-template-columns: 1.4fr 1fr;
+    }
+    .art {
+      max-width: 440px;
+      align-self: center;
+    }
+  }
+</style>

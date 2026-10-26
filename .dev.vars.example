@@ -1,0 +1,3 @@
+# Copia este archivo como .dev.vars para desarrollo local.
+# Token de un solo uso para crear la primera cuenta del panel en /admin/setup
+SETUP_TOKEN=cambia-esto-por-un-texto-largo

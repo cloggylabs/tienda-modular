@@ -1,0 +1,70 @@
+---
+import Icon from './Icon.astro';
+import { instagramUrl, whatsappUrl } from '../../modules/tiendas/settings';
+
+const store = Astro.locals.store!;
+const { settings } = store;
+const year = new Date().getFullYear();
+---
+
+<footer class="footer band band-surface">
+  <p class="wordmark">{store.name}</p>
+  {store.tagline && <p>{store.tagline}</p>}
+
+  <ul class="social">
+    {
+      settings.instagram && (
+        <li>
+          <a class="text-link" href={instagramUrl(settings)} target="_blank" rel="noopener">
+            <Icon name="instagram" /> @{settings.instagram}
+          </a>
+        </li>
+      )
+    }
+    <li>
+      <a class="text-link" href={whatsappUrl(settings)} target="_blank" rel="noopener">
+        <Icon name="whatsapp" /> WhatsApp
+      </a>
+    </li>
+  </ul>
+
+  {settings.legalNotice && <p class="legal">{settings.legalNotice}</p>}
+  <p class="legal">© {year} {store.name}{settings.footerNote && ` · ${settings.footerNote}`}</p>
+</footer>
+
+<style>
+  .footer {
+    display: grid;
+    justify-items: center;
+    gap: var(--spacing-16);
+    text-align: center;
+    border-top: 1px solid var(--color-ink);
+  }
+  .wordmark {
+    font-family: var(--font-display);
+    font-variant-ligatures: var(--ligatures-display);
+    font-size: var(--text-heading);
+    font-style: var(--accent-style);
+    font-weight: var(--font-weight-medium);
+    letter-spacing: var(--tracking-display);
+    line-height: var(--leading-display);
+  }
+  .social {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--spacing-24);
+    margin: var(--spacing-12) 0;
+    padding: 0;
+    list-style: none;
+  }
+  .social a {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-8);
+  }
+  .legal {
+    max-width: 560px;
+    font-size: var(--text-caption);
+  }
+</style>
