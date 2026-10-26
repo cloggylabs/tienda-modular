@@ -38,9 +38,12 @@ src/
     tiendas/     ajustes de cada tienda, resolución por dominio
     tema/        colores, tipografías y forma por tienda; contraste WCAG
     contenido/   bloques de la página (portada, temporada, secciones…)
+                 y sus campos editables (fields.ts)
+    medios/      fotos: archivo en R2, datos en la tabla media
   pages/
     index.astro  inicio de la tienda (pinta los bloques de la base)
-    admin/       panel: acceso, ajustes generales y editor de tema
+    admin/       panel: acceso, ajustes, contenido, fotos y tema
+    media/       sirve las fotos desde R2
   db/schema.ts   esquema de la base (Drizzle)
   lib/           base de datos y autenticación
   middleware.ts  protege /admin y elige la tienda
@@ -50,6 +53,18 @@ db/
 ```
 
 Todas las tablas de negocio cuelgan de `store_id`, así una tienda nueva es una fila más y no una copia del código.
+
+## Agregar un tipo de bloque
+
+1. Sus props y su nombre en `src/modules/contenido/blocks.ts`.
+2. Su componente en `src/modules/contenido/components/` y su caso en `BlockRenderer.astro`.
+3. Sus campos y su contenido de ejemplo en `src/modules/contenido/fields.ts`.
+
+El panel arma el formulario solo a partir de esa lista de campos.
+
+## Fotos
+
+Las fotos se suben en *Fotos* y se eligen en los bloques. Antes de subirlas, el navegador las reduce a 1600 px y las convierte a WebP; el servidor solo acepta JPG, PNG, WebP o AVIF (revisa el contenido real del archivo, no solo su extensión) de hasta 5 MB. Una foto que se usa en algún bloque no se puede borrar.
 
 ## Cambiar el esquema
 
@@ -65,6 +80,8 @@ npm run db:migrate:local
 npx wrangler login
 npx wrangler d1 create tienda-modular
 # copia el database_id que imprime en las dos entradas de wrangler.jsonc
+# activa R2 en el panel de Cloudflare (Storage & databases → R2) y luego:
+npx wrangler r2 bucket create tienda-modular-media
 npm run db:migrate:remote
 npm run db:seed:remote
 npx wrangler secret put SETUP_TOKEN                 # worker de Artelicat
@@ -84,7 +101,7 @@ Luego abre `https://artelicat.<tu-subdominio>.workers.dev/admin/setup?token=<SET
 ## Roadmap
 
 - [x] Fase 1: base multi-tienda, tema por tienda, panel con acceso, ajustes y editor de tema
-- [ ] Fase 2: editar los bloques de contenido desde el panel y subir imágenes (R2)
+- [x] Fase 2: editor de bloques de contenido y biblioteca de fotos en R2
 - [ ] Fase 3: catálogo, productos y colecciones por temporada
 - [ ] Fase 4: carrito y checkout con Bre-B/transferencia (comprobante) y contra entrega
 - [ ] Fase 5: pedidos, envíos y stock

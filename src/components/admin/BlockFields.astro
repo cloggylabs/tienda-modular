@@ -1,0 +1,336 @@
+---
+// Pinta los campos de un bloque a partir de su definición en fields.ts.
+import type { Media } from '../../db/schema';
+import type { BlockType } from '../../modules/contenido/blocks';
+import { BLOCK_FIELDS, isoToLocalInput } from '../../modules/contenido/fields';
+import { mediaUrl } from '../../modules/medios/repo';
+
+interface Props {
+  type: BlockType;
+  values: Record<string, any>;
+  media: Media[];
+  slug: string;
+}
+const { type, values, media, slug } = Astro.props;
+const fields = BLOCK_FIELDS[type];
+const LINK_TARGETS = { whatsapp: 'WhatsApp', instagram: 'Instagram', url: 'Sección o dirección web' };
+---
+
+{
+  fields.map((field) => {
+    const v = values[field.name];
+    switch (field.kind) {
+      case 'text':
+      case 'anchor':
+        return (
+          <label class="field">
+            <span>{field.label}</span>
+            <input
+              type="text"
+              name={`f.${field.name}`}
+              value={v ?? ''}
+              required={field.kind === 'text' && field.required}
+              maxlength={field.kind === 'text' ? field.max : 40}
+            />
+            {field.help && <small>{field.help}</small>}
+          </label>
+        );
+      case 'textarea':
+        return (
+          <label class="field">
+            <span>{field.label}</span>
+            <textarea name={`f.${field.name}`} maxlength={field.max} required={field.required}>{v ?? ''}</textarea>
+            {field.help && <small>{field.help}</small>}
+          </label>
+        );
+      case 'lines':
+        return (
+          <label class="field">
+            <span>{field.label}</span>
+            <textarea name={`f.${field.name}`} rows="5">{(v ?? []).join('\n')}</textarea>
+            {field.help && <small>{field.help}</small>}
+          </label>
+        );
+      case 'link': {
+        const to = v?.to ?? (field.optional ? 'none' : 'whatsapp');
+        return (
+          <fieldset class="group link" data-link>
+            <legend>{field.label}</legend>
+            {field.help && <small class="muted">{field.help}</small>}
+            <div class="grid-2">
+              <label class="field">
+                <span>Lleva a</span>
+                <select name={`f.${field.name}.to`} data-link-to>
+                  {field.optional && (
+                    <option value="none" selected={to === 'none'}>
+                      Sin botón
+                    </option>
+                  )}
+                  {Object.entries(LINK_TARGETS).map(([key, label]) => (
+                    <option value={key} selected={to === key}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label class="field" data-show="whatsapp instagram url">
+                <span>Texto del botón</span>
+                <input type="text" name={`f.${field.name}.label`} value={v?.label ?? ''} maxlength="40" />
+              </label>
+            </div>
+            <label class="field" data-show="whatsapp">
+              <span>Mensaje de WhatsApp</span>
+              <input type="text" name={`f.${field.name}.message`} value={v?.message ?? ''} maxlength="200" />
+              <small>Opcional. Vacío usa el mensaje inicial de la tienda.</small>
+            </label>
+            <label class="field" data-show="url">
+              <span>Dirección</span>
+              <input type="text" name={`f.${field.name}.href`} value={v?.href ?? ''} placeholder="#como-comprar o https://…" />
+            </label>
+          </fieldset>
+        );
+      }
+      case 'repeat': {
+        const rows = Array.from({ length: field.rows }, (_, i) => (v ?? [])[i] ?? {});
+        return (
+          <fieldset class="group">
+            <legend>{field.label}</legend>
+            {field.help && <small class="muted">{field.help}</small>}
+            <div class="repeat">
+              {rows.map((row, i) => (
+                <div class="repeat-row" data-empty={Object.keys(row).length === 0 ? '' : undefined}>
+                  <span class="num">{i + 1}</span>
+                  {field.fields.map((sub) => {
+                    const name = `f.${field.name}.${i}.${sub.name}`;
+                    if (sub.kind === 'textarea')
+                      return (
+                        <label class="field wide">
+                          <span>{sub.label}</span>
+                          <textarea name={name} rows="2" maxlength={sub.max}>{row[sub.name] ?? ''}</textarea>
+                        </label>
+                      );
+                    if (sub.kind === 'select')
+                      return (
+                        <label class="field">
+                          <span>{sub.label}</span>
+                          <select name={name}>
+                            {Object.entries(sub.options).map(([key, label]) => (
+                              <option value={key} selected={row[sub.name] === key}>
+                                {label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      );
+                    if (sub.kind === 'number')
+                      return (
+                        <label class="field narrow">
+                          <span>{sub.label}</span>
+                          <input type="number" name={name} value={row[sub.name] ?? 0} min={sub.min} max={sub.max} />
+                        </label>
+                      );
+                    if (sub.kind === 'checkbox')
+                      return (
+                        <label class="check">
+                          <input type="checkbox" name={name} checked={Boolean(row[sub.name])} />
+                          {sub.label}
+                        </label>
+                      );
+                    return (
+                      <label class="field">
+                        <span>{sub.label}</span>
+                        <input type="text" name={name} value={row[sub.name] ?? ''} maxlength={sub.max} />
+                      </label>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+            <button type="button" class="button link" data-more hidden>
+              + Mostrar más filas
+            </button>
+          </fieldset>
+        );
+      }
+      case 'image':
+        return (
+          <fieldset class="group">
+            <legend>{field.label}</legend>
+            {field.help && <small class="muted">{field.help}</small>}
+            <div class="picker">
+              <label class="pick none">
+                <input type="radio" name={`f.${field.name}.src`} value="" checked={!v?.src} />
+                <span>Sin foto</span>
+              </label>
+              {media.map((m) => (
+                <label class="pick">
+                  <input type="radio" name={`f.${field.name}.src`} value={mediaUrl(m)} checked={v?.src === mediaUrl(m)} data-alt={m.alt} />
+                  <img src={mediaUrl(m)} alt="" loading="lazy" />
+                </label>
+              ))}
+            </div>
+            {media.length === 0 && (
+              <p class="muted">
+                Aún no hay fotos. <a href={`/admin/tiendas/${slug}/fotos`}>Sube la primera en Fotos</a>.
+              </p>
+            )}
+            <div class="grid-2">
+              <label class="field">
+                <span>Descripción de la foto</span>
+                <input type="text" name={`f.${field.name}.alt`} value={v?.alt ?? ''} maxlength="200" data-alt-input />
+                <small>Para personas que usan lectores de pantalla y para Google.</small>
+              </label>
+              <label class="field">
+                <span>Rótulo del marcador</span>
+                <input type="text" name={`f.${field.name}.label`} value={v?.label ?? ''} maxlength="40" />
+                <small>Se ve solo cuando no hay foto.</small>
+              </label>
+            </div>
+          </fieldset>
+        );
+      case 'select':
+        return (
+          <label class="field">
+            <span>{field.label}</span>
+            <select name={`f.${field.name}`}>
+              {Object.entries(field.options).map(([key, label]) => (
+                <option value={key} selected={v === key}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+        );
+      case 'checkbox':
+        return (
+          <label class="check">
+            <input type="checkbox" name={`f.${field.name}`} checked={Boolean(v)} />
+            {field.label}
+          </label>
+        );
+      case 'datetime':
+        return (
+          <label class="field">
+            <span>{field.label}</span>
+            <input type="datetime-local" name={`f.${field.name}`} value={isoToLocalInput(v)} />
+            {field.help && <small>{field.help}</small>}
+          </label>
+        );
+    }
+  })
+}
+
+<script>
+  // Muestra solo los campos del destino elegido en cada botón.
+  document.querySelectorAll<HTMLElement>('[data-link]').forEach((group) => {
+    const select = group.querySelector<HTMLElement>('[data-link-to]') as HTMLElement & { value: string };
+    const sync = () =>
+      group.querySelectorAll<HTMLElement>('[data-show]').forEach((el) => {
+        el.hidden = !el.dataset.show!.split(' ').includes(select.value);
+      });
+    select.addEventListener('change', sync);
+    sync();
+  });
+
+  // Filas repetibles: oculta las vacías salvo la primera y ofrece mostrarlas.
+  document.querySelectorAll<HTMLElement>('.repeat').forEach((list) => {
+    const empty = [...list.querySelectorAll<HTMLElement>('.repeat-row[data-empty]')];
+    const more = list.parentElement!.querySelector<HTMLButtonElement>('[data-more]')!;
+    empty.slice(1).forEach((row) => (row.hidden = true));
+    if (empty.length > 1) more.hidden = false;
+    more.addEventListener('click', () => {
+      const next = empty.find((row) => row.hidden);
+      if (next) next.hidden = false;
+      if (!empty.some((row) => row.hidden)) more.hidden = true;
+    });
+  });
+
+  // Al elegir una foto, propone su descripción si el campo está vacío.
+  document.querySelectorAll<HTMLInputElement>('.picker input[type=radio]').forEach((radio) => {
+    radio.addEventListener('change', () => {
+      const alt = radio.closest('fieldset')!.querySelector<HTMLInputElement>('[data-alt-input]');
+      if (alt && !alt.value && radio.dataset.alt) alt.value = radio.dataset.alt;
+    });
+  });
+</script>
+
+<style>
+  .group {
+    display: grid;
+    gap: 12px;
+    margin: 0;
+    padding: 16px;
+    border: 1px solid var(--a-line);
+    border-radius: 8px;
+  }
+  legend {
+    padding: 0 6px;
+    font-weight: 600;
+    font-size: 14px;
+  }
+  [hidden] {
+    display: none !important;
+  }
+  .repeat {
+    display: grid;
+    gap: 10px;
+  }
+  .repeat-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed var(--a-line);
+  }
+  .repeat-row .field {
+    flex: 1 1 160px;
+  }
+  .repeat-row .wide {
+    flex-basis: 100%;
+  }
+  .repeat-row .narrow {
+    flex: 0 1 100px;
+  }
+  .num {
+    align-self: center;
+    min-width: 22px;
+    color: var(--a-muted);
+    font-size: 13px;
+  }
+  .picker {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+    gap: 10px;
+  }
+  .pick {
+    position: relative;
+    display: grid;
+    place-items: center;
+    aspect-ratio: 4 / 5;
+    overflow: hidden;
+    border: 2px solid var(--a-line);
+    border-radius: 8px;
+    background: var(--a-bg);
+    cursor: pointer;
+  }
+  .pick:has(input:checked) {
+    border-color: var(--a-accent);
+    box-shadow: 0 0 0 2px var(--a-accent);
+  }
+  .pick input {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    z-index: 1;
+  }
+  .pick img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .pick.none span {
+    font-size: 13px;
+    color: var(--a-muted);
+  }
+</style>

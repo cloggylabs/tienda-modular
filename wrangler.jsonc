@@ -19,6 +19,9 @@
       "migrations_dir": "db/migrations"
     }
   ],
+  "r2_buckets": [
+    { "binding": "MEDIA", "bucket_name": "tienda-modular-media" }
+  ],
   "env": {
     "pochi": {
       "name": "pochi-craft-3d",
@@ -32,6 +35,9 @@
           "database_id": "b36e4f7a-9323-4f2d-bdca-68ac51857692",
           "migrations_dir": "db/migrations"
         }
+      ],
+      "r2_buckets": [
+        { "binding": "MEDIA", "bucket_name": "tienda-modular-media" }
       ]
     }
   }

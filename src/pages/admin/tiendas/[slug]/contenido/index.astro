@@ -1,0 +1,195 @@
+---
+import AdminLayout from '../../../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../../../lib/db';
+import { getStoreBySlug } from '../../../../../modules/tiendas/repo';
+import { BLOCK_LABELS, isPromoActive, type BlockType, type PromoProps } from '../../../../../modules/contenido/blocks';
+import { BLOCK_DEFAULTS } from '../../../../../modules/contenido/fields';
+import {
+  createBlock,
+  deleteBlock,
+  getBlock,
+  listBlocks,
+  moveBlock,
+  setBlockEnabled,
+} from '../../../../../modules/contenido/repo';
+
+const db = getDb();
+const store = await getStoreBySlug(db, Astro.params.slug!);
+if (!store) return new Response(null, { status: 404 });
+const base = `/admin/tiendas/${store.slug}/contenido`;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('action') ?? '');
+  const id = Number(form.get('id'));
+
+  if (action === 'create') {
+    const type = String(form.get('type')) as BlockType;
+    if (type in BLOCK_DEFAULTS) {
+      const block = await createBlock(db, store.id, type, structuredClone(BLOCK_DEFAULTS[type]));
+      return Astro.redirect(`${base}/${block.id}?nuevo=1`);
+    }
+  } else if (await getBlock(db, store.id, id)) {
+    if (action === 'up' || action === 'down') await moveBlock(db, store.id, id, action);
+    if (action === 'hide') await setBlockEnabled(db, store.id, id, false);
+    if (action === 'show') await setBlockEnabled(db, store.id, id, true);
+    if (action === 'delete') {
+      await deleteBlock(db, store.id, id);
+      return Astro.redirect(`${base}?borrado=1#lista`);
+    }
+  }
+  return Astro.redirect(`${base}#bloque-${id}`);
+}
+
+const blocks = await listBlocks(db, store.id);
+const ok = Astro.url.searchParams.has('borrado') ? 'Bloque eliminado.' : null;
+
+function summary(props: Record<string, any>): string {
+  return props.title ?? props.label ?? '';
+}
+function promoStatus(props: PromoProps): string | null {
+  const now = Date.now();
+  if (props.startsAt && now < Date.parse(props.startsAt)) return 'Programada';
+  if (props.until && now > Date.parse(props.until)) return 'Vencida';
+  return isPromoActive(props) ? null : 'Fuera de fecha';
+}
+---
+
+<AdminLayout title={`Contenido de ${store.name}`} current={store.slug} section="contenido">
+  <div class="stack">
+    <h1>Contenido de la página de inicio</h1>
+    <p class="muted">Los bloques se muestran en este orden. Los cambios se publican al guardar.</p>
+  </div>
+  {ok && <div class="alert ok" role="status">{ok}</div>}
+
+  <ol class="blocks" id="lista">
+    {
+      blocks.map((b, i) => {
+        const status = b.type === 'promo' ? promoStatus(b.props as PromoProps) : null;
+        return (
+          <li id={`bloque-${b.id}`} class:list={['card block', { off: !b.enabled }]}>
+            <div class="info">
+              <span class="type">{BLOCK_LABELS[b.type] ?? b.type}</span>
+              <a class="title" href={`${base}/${b.id}`}>
+                {summary(b.props as Record<string, any>) || 'Sin título'}
+              </a>
+              <span class="tags">
+                {!b.enabled && <span class="tag">Oculto</span>}
+                {status && <span class="tag">{status}</span>}
+              </span>
+            </div>
+            <form method="post" class="actions">
+              <input type="hidden" name="id" value={b.id} />
+              <a class="button secondary" href={`${base}/${b.id}`}>
+                Editar
+              </a>
+              <button class="button link" name="action" value="up" disabled={i === 0} aria-label="Subir">
+                ↑
+              </button>
+              <button class="button link" name="action" value="down" disabled={i === blocks.length - 1} aria-label="Bajar">
+                ↓
+              </button>
+              <button class="button link" name="action" value={b.enabled ? 'hide' : 'show'}>
+                {b.enabled ? 'Ocultar' : 'Mostrar'}
+              </button>
+              <button class="button link danger" name="action" value="delete" data-confirm="¿Eliminar este bloque? No se puede deshacer.">
+                Eliminar
+              </button>
+            </form>
+          </li>
+        );
+      })
+    }
+  </ol>
+  {blocks.length === 0 && <p class="muted">La página está vacía. Agrega un bloque para empezar.</p>}
+
+  <form method="post" class="card add">
+    <h2>Agregar un bloque</h2>
+    <div class="row">
+      <select name="type" aria-label="Tipo de bloque">
+        {Object.entries(BLOCK_LABELS).map(([type, label]) => <option value={type}>{label}</option>)}
+      </select>
+      <button class="button" name="action" value="create">Agregar al final</button>
+    </div>
+    <small class="muted">Se crea con un texto de ejemplo y se abre para que lo edites.</small>
+  </form>
+
+  <div class="row">
+    <a class="button link" href={`/?tienda=${store.slug}`} target="_blank" rel="noopener">Ver tienda ↗</a>
+  </div>
+</AdminLayout>
+
+<script>
+  document.querySelectorAll<HTMLButtonElement>('[data-confirm]').forEach((button) =>
+    button.addEventListener('click', (event) => {
+      if (!confirm(button.dataset.confirm!)) event.preventDefault();
+    }),
+  );
+</script>
+
+<style>
+  .blocks {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .block {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 18px;
+  }
+  .block.off {
+    opacity: 0.6;
+  }
+  .info {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+  .type {
+    color: var(--a-muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .title {
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .title:hover {
+    text-decoration: underline;
+  }
+  .tags {
+    display: flex;
+    gap: 6px;
+  }
+  .tag {
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--a-bg);
+    color: var(--a-muted);
+    font-size: 12px;
+  }
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 12px;
+  }
+  .actions button:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+  .danger {
+    color: var(--a-err);
+  }
+  .add select {
+    width: auto;
+    min-width: 220px;
+  }
+</style>

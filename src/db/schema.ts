@@ -58,6 +58,26 @@ export const blocks = sqliteTable(
   (t) => [index('blocks_store_page_idx').on(t.storeId, t.page, t.position)],
 );
 
+/** Fotos subidas al panel. El archivo vive en R2 (binding MEDIA) bajo `key`. */
+export const media = sqliteTable(
+  'media',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    storeId: integer('store_id')
+      .notNull()
+      .references(() => stores.id, { onDelete: 'cascade' }),
+    key: text('key').notNull().unique(),
+    filename: text('filename').notNull(),
+    contentType: text('content_type').notNull(),
+    size: integer('size').notNull(),
+    width: integer('width'),
+    height: integer('height'),
+    alt: text('alt').notNull().default(''),
+    createdAt: timestamps.createdAt,
+  },
+  (t) => [index('media_store_idx').on(t.storeId, t.createdAt)],
+);
+
 /** Personas que entran al panel. Pueden administrar todas las tiendas. */
 export const adminUsers = sqliteTable(
   'admin_users',
@@ -90,5 +110,6 @@ export const adminSessions = sqliteTable(
 
 export type Store = typeof stores.$inferSelect;
 export type Block = typeof blocks.$inferSelect;
+export type Media = typeof media.$inferSelect;
 export type AdminUser = typeof adminUsers.$inferSelect;
 

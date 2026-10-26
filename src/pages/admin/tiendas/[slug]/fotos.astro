@@ -1,0 +1,273 @@
+---
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import Errors from '../../../../components/admin/Errors.astro';
+import { getDb } from '../../../../lib/db';
+import { getStoreBySlug } from '../../../../modules/tiendas/repo';
+import { BLOCK_LABELS } from '../../../../modules/contenido/blocks';
+import {
+  ALLOWED_TYPES,
+  deleteMedia,
+  getMedia,
+  listMedia,
+  mediaUrl,
+  mediaUsage,
+  updateMediaAlt,
+  uploadMedia,
+} from '../../../../modules/medios/repo';
+
+const db = getDb();
+const store = await getStoreBySlug(db, Astro.params.slug!);
+if (!store) return new Response(null, { status: 404 });
+const self = `/admin/tiendas/${store.slug}/fotos`;
+
+let errors: string[] = [];
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('action') ?? '');
+
+  if (action === 'upload') {
+    const files = form.getAll('files').filter((f): f is File => typeof f !== 'string' && f.size > 0);
+    const widths = form.getAll('width').map(Number);
+    const heights = form.getAll('height').map(Number);
+    if (!files.length) errors.push('Elige al menos una foto.');
+    if (files.length > 20) errors.push('Sube máximo 20 fotos a la vez.');
+    let uploaded = 0;
+    if (!errors.length) {
+      for (const [i, file] of files.entries()) {
+        const result = await uploadMedia(db, store.id, file, { alt: '', width: widths[i], height: heights[i] });
+        if (result.ok) uploaded++;
+        else errors.push(result.error);
+      }
+    }
+    // La subida optimizada (fetch) recibe JSON; el envío normal del formulario, la página.
+    if (Astro.request.headers.get('x-subida') === 'fetch') {
+      return Response.json({ uploaded, errors });
+    }
+    if (!errors.length) return Astro.redirect(`${self}?subidas=${uploaded}`);
+    if (uploaded) errors.unshift(`Se subieron ${uploaded} foto(s), pero otras no:`);
+  }
+
+  const id = Number(form.get('id'));
+  const item = Number.isInteger(id) && id > 0 ? await getMedia(db, store.id, id) : undefined;
+  if (item && action === 'alt') {
+    await updateMediaAlt(db, store.id, item.id, String(form.get('alt') ?? ''));
+    return Astro.redirect(`${self}?guardado=1#foto-${item.id}`);
+  }
+  if (item && action === 'delete') {
+    const usage = await mediaUsage(db, store.id, item);
+    if (usage.length) {
+      errors.push(
+        `Esa foto se usa en: ${usage.map((u) => BLOCK_LABELS[u.type] ?? u.type).join(', ')}. Cámbiala en esos bloques antes de borrarla.`,
+      );
+    } else {
+      await deleteMedia(db, store.id, item);
+      return Astro.redirect(`${self}?borrada=1`);
+    }
+  }
+}
+
+const items = await listMedia(db, store.id);
+const params = Astro.url.searchParams;
+const ok = params.has('subidas')
+  ? `${params.get('subidas')} foto(s) subidas.`
+  : params.has('guardado')
+    ? 'Descripción guardada.'
+    : params.has('borrada')
+      ? 'Foto eliminada.'
+      : null;
+const kb = (bytes: number) => (bytes > 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.round(bytes / 1024)} KB`);
+---
+
+<AdminLayout title={`Fotos de ${store.name}`} current={store.slug} section="fotos">
+  <div class="stack">
+    <h1>Fotos</h1>
+    <p class="muted">Sube aquí las fotos de {store.name} y luego elígelas en los bloques de contenido.</p>
+  </div>
+  <Errors errors={errors} ok={ok} />
+
+  <form method="post" enctype="multipart/form-data" class="card" id="upload">
+    <h2>Subir fotos</h2>
+    <input type="hidden" name="action" value="upload" />
+    <label class="drop">
+      <input type="file" name="files" accept={Object.keys(ALLOWED_TYPES).join(',')} multiple required />
+      <span>Elige o arrastra fotos JPG, PNG, WebP o AVIF</span>
+      <small class="muted">Se reducen a 1600 px y se optimizan antes de subir. Máximo 20 a la vez.</small>
+    </label>
+    <div class="muted" id="upload-status" role="status"></div>
+    <div class="row">
+      <button class="button" type="submit">Subir</button>
+    </div>
+  </form>
+
+  {items.length === 0 && <p class="muted">Todavía no hay fotos.</p>}
+  <ul class="gallery">
+    {
+      items.map((m) => (
+        <li class="card item" id={`foto-${m.id}`}>
+          <a href={mediaUrl(m)} target="_blank" rel="noopener" class="thumb">
+            <img src={mediaUrl(m)} alt={m.alt} loading="lazy" width={m.width ?? undefined} height={m.height ?? undefined} />
+          </a>
+          <p class="meta muted">
+            {m.width && m.height ? `${m.width}×${m.height} · ` : ''}
+            {kb(m.size)}
+          </p>
+          <form method="post" class="stack">
+            <input type="hidden" name="id" value={m.id} />
+            <label class="field">
+              <span>Descripción</span>
+              <input type="text" name="alt" value={m.alt} maxlength="200" placeholder="Ej. llaveros morados en una mano" />
+            </label>
+            <div class="row">
+              <button class="button secondary" name="action" value="alt">
+                Guardar
+              </button>
+              <button class="button link danger" name="action" value="delete" data-confirm="¿Eliminar esta foto?">
+                Eliminar
+              </button>
+            </div>
+          </form>
+        </li>
+      ))
+    }
+  </ul>
+</AdminLayout>
+
+<script>
+  const MAX_SIDE = 1600;
+
+  async function shrink(file: File): Promise<{ blob: Blob; name: string; width: number; height: number }> {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+    const width = Math.round(bitmap.width * scale);
+    const height = Math.round(bitmap.height * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    canvas.getContext('2d')!.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+    const encode = (type: string) => new Promise<Blob | null>((r) => canvas.toBlob(r, type, 0.85));
+    // Algunos navegadores no codifican WebP y devuelven PNG: en ese caso se usa JPEG.
+    let blob = await encode('image/webp');
+    if (!blob || blob.type !== 'image/webp') blob = await encode('image/jpeg');
+    // Si la optimización no ayuda (foto ya pequeña), se sube la original.
+    if (!blob || (blob.size >= file.size && scale === 1)) return { blob: file, name: file.name, width, height };
+    const ext = blob.type === 'image/webp' ? 'webp' : 'jpg';
+    return { blob, name: file.name.replace(/\.[^.]+$/, '') + '.' + ext, width, height };
+  }
+
+  const form = document.getElementById('upload') as HTMLFormElement;
+  const status = document.getElementById('upload-status')!;
+  form.addEventListener('submit', async (event) => {
+    const input = form.querySelector<HTMLInputElement>('input[type=file]')!;
+    const files = [...(input.files ?? [])];
+    if (!files.length || typeof createImageBitmap !== 'function') return; // envío normal sin optimizar
+    event.preventDefault();
+    const button = form.querySelector<HTMLButtonElement>('button[type=submit]')!;
+    button.disabled = true;
+    const data = new FormData();
+    data.set('action', 'upload');
+    try {
+      for (const [i, file] of files.entries()) {
+        status.textContent = `Optimizando ${i + 1} de ${files.length}…`;
+        try {
+          const out = await shrink(file);
+          data.append('files', out.blob, out.name);
+          data.append('width', String(out.width));
+          data.append('height', String(out.height));
+        } catch {
+          // No se pudo leer como imagen: se envía tal cual y el servidor explica el problema.
+          data.append('files', file, file.name);
+          data.append('width', '');
+          data.append('height', '');
+        }
+      }
+      status.textContent = 'Subiendo…';
+      const response = await fetch(location.pathname, { method: 'POST', body: data, headers: { 'x-subida': 'fetch' } });
+      if (!response.ok) throw new Error(String(response.status));
+      const result = (await response.json()) as { uploaded: number; errors: string[] };
+      if (!result.errors.length) {
+        location.href = `${location.pathname}?subidas=${result.uploaded}`;
+        return;
+      }
+      // Hubo errores: se muestran sin recargar y se refresca la galería con lo que sí se subió.
+      status.replaceChildren();
+      const alert = document.createElement('div');
+      alert.className = 'alert error';
+      alert.setAttribute('role', 'alert');
+      const title = document.createElement('strong');
+      title.textContent = result.uploaded ? `Se subieron ${result.uploaded} foto(s), pero otras no:` : 'No se subió ninguna foto:';
+      const list = document.createElement('ul');
+      for (const message of result.errors) {
+        const li = document.createElement('li');
+        li.textContent = message;
+        list.appendChild(li);
+      }
+      alert.appendChild(title);
+      alert.appendChild(list);
+      status.appendChild(alert);
+      if (result.uploaded) {
+        const fresh = new DOMParser().parseFromString(await (await fetch(location.pathname)).text(), 'text/html');
+        const gallery = fresh.querySelector('.gallery');
+        if (gallery) document.querySelector('.gallery')!.replaceWith(gallery);
+        bindConfirms();
+      }
+      input.value = '';
+      button.disabled = false;
+    } catch {
+      status.textContent = 'No se pudo subir. Revisa tu conexión e inténtalo de nuevo.';
+      button.disabled = false;
+    }
+  });
+
+  function bindConfirms() {
+    document.querySelectorAll<HTMLButtonElement>('[data-confirm]').forEach((button) =>
+      button.addEventListener('click', (event) => {
+        if (!confirm(button.dataset.confirm!)) event.preventDefault();
+      }),
+    );
+  }
+  bindConfirms();
+</script>
+
+<style>
+  .drop {
+    display: grid;
+    gap: 6px;
+    justify-items: center;
+    padding: 28px 16px;
+    border: 2px dashed var(--a-line);
+    border-radius: 10px;
+    text-align: center;
+    cursor: pointer;
+  }
+  .drop:hover {
+    border-color: var(--a-accent);
+  }
+  .gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 14px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .item {
+    gap: 10px;
+    padding: 12px;
+  }
+  .thumb img {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 4 / 5;
+    object-fit: cover;
+    border-radius: 6px;
+    background: var(--a-bg);
+  }
+  .meta {
+    font-size: 12px;
+  }
+  .danger {
+    color: var(--a-err);
+  }
+</style>

@@ -1,0 +1,71 @@
+---
+import AdminLayout from '../../../../../layouts/AdminLayout.astro';
+import Errors from '../../../../../components/admin/Errors.astro';
+import BlockFields from '../../../../../components/admin/BlockFields.astro';
+import { getDb } from '../../../../../lib/db';
+import { getStoreBySlug } from '../../../../../modules/tiendas/repo';
+import { BLOCK_LABELS } from '../../../../../modules/contenido/blocks';
+import { BLOCK_FIELDS, parseBlockForm } from '../../../../../modules/contenido/fields';
+import { getBlock, updateBlockProps } from '../../../../../modules/contenido/repo';
+import { listMedia } from '../../../../../modules/medios/repo';
+
+const db = getDb();
+const store = await getStoreBySlug(db, Astro.params.slug!);
+const block = store ? await getBlock(db, store.id, Number(Astro.params.id)) : undefined;
+if (!store || !block || !(block.type in BLOCK_FIELDS)) return new Response(null, { status: 404 });
+
+const list = `/admin/tiendas/${store.slug}/contenido`;
+let values: Record<string, unknown> = block.props as unknown as Record<string, unknown>;
+let errors: string[] = [];
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const result = parseBlockForm(block.type, form);
+  if (result.ok) {
+    // Una foto solo puede venir de la biblioteca de esta misma tienda.
+    const own = `/media/tiendas/${store.id}/`;
+    const image = (result.props as { image?: { src?: string } }).image;
+    if (image?.src && !image.src.startsWith(own)) {
+      errors = ['Foto: elige una foto de la biblioteca de esta tienda.'];
+      values = result.props as unknown as Record<string, unknown>;
+    } else {
+      await updateBlockProps(db, store.id, block.id, result.props);
+      return Astro.redirect(`${list}/${block.id}?guardado=1`);
+    }
+  } else {
+    errors = result.errors;
+    values = result.draft;
+  }
+}
+
+const media = await listMedia(db, store.id);
+const ok = Astro.url.searchParams.has('guardado')
+  ? 'Bloque guardado. Ya se ve en la tienda.'
+  : Astro.url.searchParams.has('nuevo')
+    ? 'Bloque creado al final de la página con texto de ejemplo. Edítalo y guarda.'
+    : null;
+---
+
+<AdminLayout title={`Editar ${BLOCK_LABELS[block.type]}`} current={store.slug} section="contenido">
+  <div class="stack">
+    <a class="button link back" href={`${list}#bloque-${block.id}`}>← Contenido</a>
+    <h1>{BLOCK_LABELS[block.type]}</h1>
+    {!block.enabled && <p class="muted">Este bloque está oculto; no se ve en la tienda hasta que lo muestres.</p>}
+  </div>
+  <Errors errors={errors} ok={ok} />
+
+  <form method="post" class="card stack">
+    <BlockFields type={block.type} values={values} media={media} slug={store.slug} />
+    <div class="row">
+      <button class="button" type="submit">Guardar</button>
+      <a class="button link" href={`/?tienda=${store.slug}`} target="_blank" rel="noopener">Ver tienda ↗</a>
+    </div>
+  </form>
+</AdminLayout>
+
+<style>
+  .back {
+    justify-content: flex-start;
+    width: fit-content;
+  }
+</style>

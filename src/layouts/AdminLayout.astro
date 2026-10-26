@@ -7,7 +7,7 @@ interface Props {
   title: string;
   /** slug de la tienda activa en el menú */
   current?: string;
-  section?: 'general' | 'tema';
+  section?: 'general' | 'tema' | 'contenido' | 'fotos';
 }
 const { title, current, section } = Astro.props;
 const user = Astro.locals.user!;
@@ -42,6 +42,16 @@ const stores = await listStores(getDb());
                       </a>
                     </li>
                     <li>
+                      <a href={`/admin/tiendas/${s.slug}/contenido`} aria-current={section === 'contenido' ? 'page' : undefined}>
+                        Contenido
+                      </a>
+                    </li>
+                    <li>
+                      <a href={`/admin/tiendas/${s.slug}/fotos`} aria-current={section === 'fotos' ? 'page' : undefined}>
+                        Fotos
+                      </a>
+                    </li>
+                    <li>
                       <a href={`/admin/tiendas/${s.slug}/tema`} aria-current={section === 'tema' ? 'page' : undefined}>
                         Tema y colores
                       </a>
@@ -57,7 +67,7 @@ const stores = await listStores(getDb());
             ))
           }
         </nav>
-        <p class="soon muted">Próximamente: contenido, catálogo, colecciones y pedidos.</p>
+        <p class="soon muted">Próximamente: catálogo, colecciones y pedidos.</p>
         <form method="post" action="/admin/logout" class="who">
           <span>{user.name}</span>
           <button class="button link" type="submit">Cerrar sesión</button>
@@ -149,6 +159,56 @@ const stores = await listStores(getDb());
     width: 100%;
     max-width: 1100px;
     padding: 24px 16px 64px;
+  }
+  /* Celular: menú compacto para que el contenido se vea desde la primera pantalla. */
+  @media (max-width: 899px) {
+    .side {
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px 12px;
+      padding: 14px 16px;
+    }
+    .brand {
+      align-self: center;
+    }
+    .who {
+      grid-column: 2;
+      grid-row: 1;
+      padding-top: 0;
+      border-top: 0;
+    }
+    .who span {
+      display: none;
+    }
+    nav {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      min-width: 0;
+    }
+    /* Las tiendas van en fila; las secciones de la tienda activa, debajo. */
+    .store {
+      display: contents;
+    }
+    .store-name {
+      padding: 6px 10px;
+      border: 1px solid var(--a-line);
+    }
+    ul {
+      order: 1;
+      display: flex;
+      flex-wrap: nowrap;
+      flex-basis: 100%;
+      gap: 14px;
+      min-width: 0;
+      margin: 4px 0 0;
+      padding: 0 2px 4px;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+    .soon {
+      display: none;
+    }
   }
   @media (min-width: 900px) {
     .shell {

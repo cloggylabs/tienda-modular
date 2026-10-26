@@ -11,6 +11,13 @@ Ecommerce multi-tienda (Artelicat y Pochi Craft 3D) en Astro 7 + Cloudflare Work
 - El contenido inicial vive en `db/seed-data.ts`; `db/seed.sql` se genera.
 - No usar logos, fotos oficiales ni tipografías de BTS/HYBE ni de Minecraft/Mojang. Nombres solo de forma descriptiva.
 
+## Trampas conocidas
+- D1 limita los patrones de `LIKE` a 50 caracteres: para buscar dentro de JSON usa `instr()`. Además, `like()` de Drizzle sobre una columna JSON convierte el patrón a JSON.
+- Astro conserva los saltos y la sangría dentro de `<textarea>`: escribe `<textarea ...>{valor}</textarea>` en una sola línea.
+- En los `<script>` del navegador, los tipos de Workers chocan con los del DOM (`Element.append`, `HTMLSelectElement`): usa `appendChild` o tipos estructurales.
+- El archivo de la base local depende del `database_id` de `wrangler.jsonc`; si cambia, la base local queda en otro archivo.
+- Un bloque nuevo se define en tres lugares: `blocks.ts` (tipos), `components/` + `BlockRenderer.astro`, y `fields.ts` (campos del panel).
+
 ## Comandos
 - `npm run dev` · `npm run build` (incluye `astro check`) · `npm run db:reset:local`
 - Vista previa de otra tienda en local: `/?tienda=pochi-craft-3d`

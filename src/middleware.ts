@@ -6,8 +6,11 @@ import { PREVIEW_COOKIE, PREVIEW_PARAM, resolveStore } from './modules/tiendas/r
 const PUBLIC_ADMIN_PATHS = new Set(['/admin/login', '/admin/setup']);
 
 export const onRequest = defineMiddleware(async (ctx, next) => {
-  const db = getDb();
   const { pathname } = ctx.url;
+  // Las fotos no dependen de la tienda ni de la sesión.
+  if (pathname.startsWith('/media/')) return next();
+
+  const db = getDb();
   const secure = ctx.url.protocol === 'https:';
 
   // --- Panel de administración ---
