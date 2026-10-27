@@ -40,8 +40,10 @@ src/
     contenido/   bloques de la página (portada, temporada, secciones…)
                  y sus campos editables (fields.ts)
     medios/      fotos: archivo en R2, datos en la tabla media
+    catalogo/    productos, variantes, categorías y colecciones por temporada
   pages/
     index.astro  inicio de la tienda (pinta los bloques de la base)
+    catalogo.astro, producto/, coleccion/   catálogo público
     admin/       panel: acceso, ajustes, contenido, fotos y tema
     media/       sirve las fotos desde R2
   db/schema.ts   esquema de la base (Drizzle)
@@ -62,9 +64,17 @@ Todas las tablas de negocio cuelgan de `store_id`, así una tienda nueva es una 
 
 El panel arma el formulario solo a partir de esa lista de campos.
 
+## Catálogo
+
+- **Productos:** precio en COP sin decimales, precio anterior opcional (oferta), hasta 8 fotos, estado *Borrador / Publicado / Archivado* y hasta 10 variantes con precio y stock propios.
+- **Disponibilidad:** *Hecho por pedido* (con días de producción) o *Con stock*; con stock en cero el producto se muestra como agotado y el botón pregunta cuándo vuelve.
+- **Categorías** permanentes para filtrar el catálogo y **colecciones** con fechas que aparecen y desaparecen solas.
+- Cada producto tiene su página (`/producto/<direccion>`) con datos estructurados para Google y un botón de WhatsApp que incluye producto, opción, precio y enlace.
+- El bloque *Productos* muestra en el inicio destacados, recientes, una colección o una categoría. «Catálogo» aparece en el menú cuando hay productos publicados.
+
 ## Fotos
 
-Las fotos se suben en *Fotos* y se eligen en los bloques. Antes de subirlas, el navegador las reduce a 1600 px y las convierte a WebP; el servidor solo acepta JPG, PNG, WebP o AVIF (revisa el contenido real del archivo, no solo su extensión) de hasta 5 MB. Una foto que se usa en algún bloque no se puede borrar.
+Las fotos se suben en *Fotos* y se eligen en los bloques. Antes de subirlas, el navegador las reduce a 1600 px y las convierte a WebP; el servidor solo acepta JPG, PNG, WebP o AVIF (revisa el contenido real del archivo, no solo su extensión) de hasta 5 MB. Una foto que se usa en un bloque, un producto o una colección no se puede borrar.
 
 ## Cambiar el esquema
 
@@ -102,7 +112,7 @@ Luego abre `https://artelicat.<tu-subdominio>.workers.dev/admin/setup?token=<SET
 
 - [x] Fase 1: base multi-tienda, tema por tienda, panel con acceso, ajustes y editor de tema
 - [x] Fase 2: editor de bloques de contenido y biblioteca de fotos en R2
-- [ ] Fase 3: catálogo, productos y colecciones por temporada
+- [x] Fase 3: catálogo con productos, variantes, categorías y colecciones por temporada
 - [ ] Fase 4: carrito y checkout con Bre-B/transferencia (comprobante) y contra entrega
 - [ ] Fase 5: pedidos, envíos y stock
 - [ ] Después: personalización de productos y pasarela en línea

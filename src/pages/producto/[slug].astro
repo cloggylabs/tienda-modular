@@ -1,0 +1,333 @@
+---
+import StoreLayout from '../../layouts/StoreLayout.astro';
+import Badge from '../../components/store/Badge.astro';
+import Icon from '../../components/store/Icon.astro';
+import ImageSlot from '../../components/store/ImageSlot.astro';
+import ProductGrid from '../../components/store/ProductGrid.astro';
+import { getDb } from '../../lib/db';
+import { formatCOP, orderMessage, stockState, variantPrice } from '../../modules/catalogo/format';
+import { getActiveProduct, listActiveProducts, listCategories, productActiveCollections } from '../../modules/catalogo/repo';
+import { whatsappUrl } from '../../modules/tiendas/settings';
+
+const db = getDb();
+const store = Astro.locals.store!;
+const product = await getActiveProduct(db, store.id, Astro.params.slug ?? '');
+if (!product) return Astro.rewrite('/404');
+
+const [categories, collections, related] = await Promise.all([
+  listCategories(db, store.id),
+  productActiveCollections(db, product.id),
+  product.categoryId ? listActiveProducts(db, store.id, { categoryId: product.categoryId, limit: 5 }) : Promise.resolve([]),
+]);
+const category = categories.find((c) => c.id === product.categoryId);
+const others = related.filter((p) => p.id !== product.id).slice(0, 4);
+
+const url = new URL(`/producto/${product.slug}`, Astro.url.origin).toString();
+const greeting = store.settings.whatsappMessage;
+
+// Cada opción (o el producto sin variantes) con su precio, estado y enlace de WhatsApp ya armados.
+const options = (product.variants.length ? product.variants : [undefined]).map((variant) => {
+  const price = variantPrice(product, variant);
+  const state = stockState(product, variant);
+  const message = state.available
+    ? orderMessage({ greeting, product, variant, price, url })
+    : `${greeting.trim()}\n\n¿Cuándo vuelve a estar disponible ${product.name}${variant ? ` (${variant.name})` : ''}?\n${url}`;
+  return { variant, price, state, href: whatsappUrl(store.settings, message) };
+});
+const first = options.find((o) => o.state.available) ?? options[0]!;
+const onSale = product.compareAtPrice && product.compareAtPrice > first.price;
+
+const paragraphs = product.description.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+const images = product.images.length ? product.images : [undefined];
+
+// Datos estructurados para Google (precio, disponibilidad, fotos).
+const origin = Astro.url.origin;
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Product',
+  name: product.name,
+  description: product.description.slice(0, 500) || undefined,
+  image: product.images.map((src) => origin + src),
+  brand: { '@type': 'Brand', name: store.name },
+  offers: options.map((o) => ({
+    '@type': 'Offer',
+    name: o.variant?.name,
+    price: o.price,
+    priceCurrency: 'COP',
+    availability: o.state.available ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+    url,
+  })),
+};
+const jsonLdHtml = JSON.stringify(jsonLd).replace(/</g, '\\u003c');
+---
+
+<StoreLayout
+  title={`${product.name} — ${store.name}`}
+  description={product.description.slice(0, 160) || `${product.name} de ${store.name}.`}
+  image={product.images[0] ? origin + product.images[0] : undefined}
+>
+  <script type="application/ld+json" set:html={jsonLdHtml} />
+  <nav class="crumbs band" aria-label="Ruta">
+    <a href="/catalogo">Catálogo</a>
+    {
+      category && (
+        <>
+          <span aria-hidden="true">/</span>
+          <a href={`/catalogo?categoria=${category.slug}`}>{category.name}</a>
+        </>
+      )
+    }
+  </nav>
+
+  <section class="product band">
+    <div class="gallery">
+      <div class="main" id="main-image">
+        <ImageSlot src={images[0]} alt={product.name} label={product.name} />
+      </div>
+      {
+        product.images.length > 1 && (
+          <ul class="thumbs" aria-label="Más fotos">
+            {product.images.map((src, i) => (
+              <li>
+                <button type="button" data-src={src} aria-label={`Ver foto ${i + 1}`} aria-pressed={i === 0 ? 'true' : 'false'}>
+                  <img src={src} alt="" loading="lazy" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )
+      }
+    </div>
+
+    <div class="info">
+      {collections.map((c) => <a class="season" href={`/coleccion/${c.slug}`}>{c.name}</a>)}
+      <h1 class="heading">{product.name}</h1>
+      <p class="price">
+        {onSale && <s>{formatCOP(product.compareAtPrice!)}</s>}
+        <span data-price>{formatCOP(first.price)}</span>
+      </p>
+      <p class:list={['state', { out: !first.state.available }]} data-state>{first.state.label}</p>
+
+      {
+        product.variants.length > 0 && (
+          <fieldset class="variants">
+            <legend>Opciones</legend>
+            {options.map((o) => (
+              <label class:list={{ out: !o.state.available }}>
+                <input
+                  type="radio"
+                  name="variante"
+                  value={o.variant!.id}
+                  checked={o === first}
+                  data-price={formatCOP(o.price)}
+                  data-state={o.state.label}
+                  data-available={String(o.state.available)}
+                  data-href={o.href}
+                />
+                <span>{o.variant!.name}</span>
+              </label>
+            ))}
+          </fieldset>
+        )
+      }
+
+      <a class="btn btn-primary order" href={first.href} target="_blank" rel="noopener" data-order>
+        <Icon name="whatsapp" />
+        <span data-order-label>{first.state.available ? 'Pedir por WhatsApp' : 'Preguntar cuándo llega'}</span>
+      </a>
+      <p class="note">Te respondemos por WhatsApp para confirmar el pedido, el pago y el envío.</p>
+
+      {paragraphs.length > 0 && <div class="description">{paragraphs.map((p) => <p>{p}</p>)}</div>}
+    </div>
+  </section>
+
+  {
+    others.length > 0 && (
+      <section class="band band-surface related">
+        <Badge>También te puede gustar</Badge>
+        <ProductGrid products={others} />
+      </section>
+    )
+  }
+</StoreLayout>
+
+<script>
+  // Galería: las miniaturas cambian la foto principal.
+  const main = document.querySelector<HTMLImageElement>('#main-image img');
+  document.querySelectorAll<HTMLButtonElement>('.thumbs button').forEach((button) =>
+    button.addEventListener('click', () => {
+      if (main) main.src = button.dataset.src!;
+      document.querySelectorAll('.thumbs button').forEach((b) => b.setAttribute('aria-pressed', String(b === button)));
+    }),
+  );
+
+  // Variantes: actualizan precio, disponibilidad y el mensaje de WhatsApp.
+  const price = document.querySelector<HTMLElement>('[data-price]');
+  const state = document.querySelector<HTMLElement>('[data-state]');
+  const order = document.querySelector<HTMLAnchorElement>('[data-order]');
+  const label = document.querySelector<HTMLElement>('[data-order-label]');
+  document.querySelectorAll<HTMLInputElement>('input[name=variante]').forEach((input) =>
+    input.addEventListener('change', () => {
+      const available = input.dataset.available === 'true';
+      if (price) price.textContent = input.dataset.price!;
+      if (state) {
+        state.textContent = input.dataset.state!;
+        state.classList.toggle('out', !available);
+      }
+      if (order) order.href = input.dataset.href!;
+      if (label) label.textContent = available ? 'Pedir por WhatsApp' : 'Preguntar cuándo llega';
+    }),
+  );
+</script>
+
+<style>
+  .crumbs {
+    display: flex;
+    gap: var(--spacing-8);
+    padding-top: var(--spacing-24);
+    padding-bottom: 0;
+    font-size: var(--text-caption);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .product {
+    display: grid;
+    gap: var(--spacing-36);
+    padding-top: var(--spacing-24);
+  }
+  .gallery {
+    display: grid;
+    gap: var(--spacing-12);
+    align-content: start;
+  }
+  .thumbs {
+    display: flex;
+    gap: var(--spacing-8);
+    margin: 0;
+    padding: 0;
+    overflow-x: auto;
+    list-style: none;
+  }
+  .thumbs button {
+    width: 72px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: calc(var(--radius-images) / 2);
+    background: none;
+    overflow: hidden;
+    cursor: pointer;
+  }
+  .thumbs button[aria-pressed='true'] {
+    border-color: var(--color-ink);
+  }
+  .thumbs img {
+    width: 100%;
+    aspect-ratio: 4 / 5;
+    object-fit: cover;
+  }
+  .info {
+    display: grid;
+    align-content: start;
+    justify-items: start;
+    gap: var(--spacing-16);
+    max-width: 520px;
+  }
+  .season {
+    padding: var(--spacing-4) var(--spacing-12);
+    border-radius: var(--radius-pills);
+    background: var(--color-season);
+    color: var(--color-on-season);
+    font-size: var(--text-caption);
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .price {
+    display: flex;
+    gap: var(--spacing-12);
+    align-items: baseline;
+    font-size: var(--text-subheading);
+    font-weight: var(--font-weight-bold);
+  }
+  s {
+    opacity: 0.6;
+    font-size: var(--text-body);
+    font-weight: var(--font-weight-regular);
+  }
+  .state {
+    font-size: var(--text-caption);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .state.out {
+    text-decoration: line-through;
+  }
+  .variants {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-8);
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  legend {
+    width: 100%;
+    margin-bottom: var(--spacing-8);
+    font-weight: var(--font-weight-medium);
+  }
+  .variants label {
+    position: relative;
+  }
+  .variants input {
+    position: absolute;
+    opacity: 0;
+    inset: 0;
+  }
+  .variants span {
+    display: inline-block;
+    padding: var(--spacing-10) var(--spacing-16);
+    border: 1px solid var(--color-ink);
+    border-radius: var(--radius-buttons);
+    cursor: pointer;
+  }
+  .variants input:checked + span {
+    background: var(--color-ink);
+    color: var(--color-canvas);
+  }
+  .variants input:focus-visible + span {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+  }
+  .variants .out span {
+    opacity: 0.55;
+    text-decoration: line-through;
+  }
+  .order {
+    width: 100%;
+  }
+  .note {
+    font-size: var(--text-caption);
+  }
+  .description {
+    width: 100%;
+    display: grid;
+    gap: var(--spacing-12);
+    padding-top: var(--spacing-16);
+    border-top: 1px solid var(--color-ink);
+    white-space: pre-line;
+  }
+  .related {
+    display: grid;
+    justify-items: center;
+    gap: var(--spacing-30);
+  }
+  @media (min-width: 900px) {
+    .product {
+      grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+      gap: var(--spacing-60);
+    }
+    .crumbs {
+      padding-top: var(--spacing-36);
+    }
+  }
+</style>

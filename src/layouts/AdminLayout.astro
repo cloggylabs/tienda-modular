@@ -7,7 +7,7 @@ interface Props {
   title: string;
   /** slug de la tienda activa en el menú */
   current?: string;
-  section?: 'general' | 'tema' | 'contenido' | 'fotos';
+  section?: 'general' | 'tema' | 'contenido' | 'fotos' | 'productos' | 'categorias' | 'colecciones';
 }
 const { title, current, section } = Astro.props;
 const user = Astro.locals.user!;
@@ -47,6 +47,21 @@ const stores = await listStores(getDb());
                       </a>
                     </li>
                     <li>
+                      <a href={`/admin/tiendas/${s.slug}/productos`} aria-current={section === 'productos' ? 'page' : undefined}>
+                        Productos
+                      </a>
+                    </li>
+                    <li>
+                      <a href={`/admin/tiendas/${s.slug}/categorias`} aria-current={section === 'categorias' ? 'page' : undefined}>
+                        Categorías
+                      </a>
+                    </li>
+                    <li>
+                      <a href={`/admin/tiendas/${s.slug}/colecciones`} aria-current={section === 'colecciones' ? 'page' : undefined}>
+                        Colecciones
+                      </a>
+                    </li>
+                    <li>
                       <a href={`/admin/tiendas/${s.slug}/fotos`} aria-current={section === 'fotos' ? 'page' : undefined}>
                         Fotos
                       </a>
@@ -67,7 +82,7 @@ const stores = await listStores(getDb());
             ))
           }
         </nav>
-        <p class="soon muted">Próximamente: catálogo, colecciones y pedidos.</p>
+        <p class="soon muted">Próximamente: carrito, pedidos y envíos.</p>
         <form method="post" action="/admin/logout" class="who">
           <span>{user.name}</span>
           <button class="button link" type="submit">Cerrar sesión</button>

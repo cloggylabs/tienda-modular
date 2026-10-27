@@ -1,0 +1,101 @@
+---
+import AdminLayout from '../../../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../../../lib/db';
+import { getStoreBySlug } from '../../../../../modules/tiendas/repo';
+import { collectionProductCounts, listCollections } from '../../../../../modules/catalogo/repo';
+import { collectionStatus } from '../../../../../modules/catalogo/format';
+
+const db = getDb();
+const store = await getStoreBySlug(db, Astro.params.slug!);
+if (!store) return new Response(null, { status: 404 });
+const base = `/admin/tiendas/${store.slug}/colecciones`;
+const [collections, counts] = await Promise.all([listCollections(db, store.id), collectionProductCounts(db, store.id)]);
+const fmt = new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'America/Bogota' });
+const range = (a: Date | null, b: Date | null) =>
+  a && b ? `${fmt.format(a)} – ${fmt.format(b)}` : a ? `Desde ${fmt.format(a)}` : b ? `Hasta ${fmt.format(b)}` : 'Sin fechas';
+const ok = Astro.url.searchParams.has('borrada') ? 'Colección eliminada. Sus productos siguen en el catálogo.' : null;
+---
+
+<AdminLayout title={`Colecciones de ${store.name}`} current={store.slug} section="colecciones">
+  <div class="row between">
+    <div class="stack">
+      <h1>Colecciones</h1>
+      <p class="muted">Temporadas con fecha (Halloween, Navidad, Feria del Libro). Aparecen y desaparecen solas de la tienda.</p>
+    </div>
+    <a class="button" href={`${base}/nueva`}>Nueva colección</a>
+  </div>
+  {ok && <div class="alert ok" role="status">{ok}</div>}
+
+  {
+    collections.length === 0 ? (
+      <div class="card">
+        <p>Todavía no hay colecciones.</p>
+      </div>
+    ) : (
+      <ul class="list">
+        {collections.map((c) => {
+          const status = collectionStatus(c);
+          return (
+            <li class="card item">
+              <div class="info">
+                <a class="name" href={`${base}/${c.id}`}>
+                  {c.name}
+                </a>
+                <span class="muted">
+                  {range(c.startsAt, c.endsAt)} · {counts.get(c.id) ?? 0} productos
+                </span>
+              </div>
+              <span class:list={['tag', { on: status === 'Activa' }]}>{status}</span>
+            </li>
+          );
+        })}
+      </ul>
+    )
+  }
+</AdminLayout>
+
+<style>
+  .between {
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .list {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .item {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 18px;
+  }
+  .info {
+    display: grid;
+  }
+  .name {
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .name:hover {
+    text-decoration: underline;
+  }
+  .info .muted {
+    font-size: 14px;
+  }
+  .tag {
+    padding: 1px 10px;
+    border-radius: 999px;
+    background: var(--a-bg);
+    color: var(--a-muted);
+    font-size: 12px;
+  }
+  .tag.on {
+    background: var(--a-ok-bg);
+    color: var(--a-ok);
+  }
+</style>

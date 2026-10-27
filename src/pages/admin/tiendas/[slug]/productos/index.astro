@@ -1,0 +1,179 @@
+---
+import AdminLayout from '../../../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../../../lib/db';
+import { getStoreBySlug } from '../../../../../modules/tiendas/repo';
+import { listCategories, listProductsAdmin } from '../../../../../modules/catalogo/repo';
+import { STATUS_LABELS, priceLabel, stockState } from '../../../../../modules/catalogo/format';
+import type { Product } from '../../../../../db/schema';
+
+const db = getDb();
+const store = await getStoreBySlug(db, Astro.params.slug!);
+if (!store) return new Response(null, { status: 404 });
+const base = `/admin/tiendas/${store.slug}/productos`;
+
+const q = (Astro.url.searchParams.get('q') ?? '').trim().slice(0, 80);
+const statusParam = Astro.url.searchParams.get('estado') ?? '';
+const status = (Object.keys(STATUS_LABELS) as Product['status'][]).find((s) => s === statusParam);
+
+const [products, categories] = await Promise.all([
+  listProductsAdmin(db, store.id, { q: q || undefined, status }),
+  listCategories(db, store.id),
+]);
+const categoryName = new Map(categories.map((c) => [c.id, c.name]));
+const params = Astro.url.searchParams;
+const ok = params.has('borrado') ? 'Producto eliminado.' : null;
+---
+
+<AdminLayout title={`Productos de ${store.name}`} current={store.slug} section="productos">
+  <div class="row between">
+    <div class="stack">
+      <h1>Productos</h1>
+      <p class="muted">Solo los productos publicados se ven en la tienda.</p>
+    </div>
+    <a class="button" href={`${base}/nuevo`}>Nuevo producto</a>
+  </div>
+  {ok && <div class="alert ok" role="status">{ok}</div>}
+
+  <form method="get" class="row filters">
+    <input type="text" name="q" value={q} placeholder="Buscar por nombre" aria-label="Buscar por nombre" />
+    <select name="estado" aria-label="Estado">
+      <option value="">Todos los estados</option>
+      {Object.entries(STATUS_LABELS).map(([key, label]) => <option value={key} selected={status === key}>{label}</option>)}
+    </select>
+    <button class="button secondary" type="submit">Filtrar</button>
+    {(q || status) && <a class="button link" href={base}>Limpiar</a>}
+  </form>
+
+  {
+    products.length === 0 ? (
+      <div class="card empty">
+        <p>{q || status ? 'No hay productos con ese filtro.' : 'Todavía no hay productos.'}</p>
+        {!q && !status && (
+          <a class="button" href={`${base}/nuevo`}>
+            Crear el primero
+          </a>
+        )}
+      </div>
+    ) : (
+      <ul class="list">
+        {products.map((p) => {
+          const state = stockState(p);
+          return (
+            <li class="card item">
+              <a class="thumb" href={`${base}/${p.id}`} tabindex="-1" aria-hidden="true">
+                {p.images[0] ? <img src={p.images[0]} alt="" loading="lazy" /> : <span>Sin foto</span>}
+              </a>
+              <div class="info">
+                <a class="name" href={`${base}/${p.id}`}>
+                  {p.name}
+                </a>
+                <span class="muted">
+                  {priceLabel(p)}
+                  {p.categoryId && categoryName.has(p.categoryId) ? ` · ${categoryName.get(p.categoryId)}` : ''}
+                  {p.variants.length ? ` · ${p.variants.length} variantes` : ''}
+                </span>
+              </div>
+              <div class="tags">
+                <span class:list={['tag', p.status]}>{STATUS_LABELS[p.status]}</span>
+                {p.featured && <span class="tag">Destacado</span>}
+                {!state.available && <span class="tag warn">Agotado</span>}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    )
+  }
+</AdminLayout>
+
+<style>
+  .between {
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .filters input {
+    flex: 1 1 220px;
+    width: auto;
+  }
+  .filters select {
+    width: auto;
+  }
+  .empty {
+    justify-items: start;
+  }
+  .list {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .item {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px 14px;
+    padding: 10px 14px;
+  }
+  .thumb {
+    display: grid;
+    place-items: center;
+    width: 56px;
+    aspect-ratio: 4 / 5;
+    overflow: hidden;
+    border-radius: 6px;
+    background: var(--a-bg);
+    color: var(--a-muted);
+    font-size: 10px;
+    text-decoration: none;
+  }
+  .thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .info {
+    display: grid;
+    min-width: 0;
+  }
+  .name {
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .name:hover {
+    text-decoration: underline;
+  }
+  .info .muted {
+    font-size: 14px;
+  }
+  .tags {
+    grid-column: 2;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .tag {
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--a-bg);
+    color: var(--a-muted);
+    font-size: 12px;
+  }
+  .tag.active {
+    background: var(--a-ok-bg);
+    color: var(--a-ok);
+  }
+  .tag.warn {
+    background: var(--a-err-bg);
+    color: var(--a-err);
+  }
+  @media (min-width: 720px) {
+    .item {
+      grid-template-columns: 56px minmax(0, 1fr) auto;
+    }
+    .tags {
+      grid-column: 3;
+      justify-content: flex-end;
+    }
+  }
+</style>

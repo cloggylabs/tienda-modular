@@ -1,0 +1,46 @@
+---
+import StoreLayout from '../../layouts/StoreLayout.astro';
+import Badge from '../../components/store/Badge.astro';
+import ProductGrid from '../../components/store/ProductGrid.astro';
+import { getDb } from '../../lib/db';
+import { getActiveCollection, listCollectionProducts } from '../../modules/catalogo/repo';
+
+const db = getDb();
+const store = Astro.locals.store!;
+// Una colección fuera de fecha u oculta no existe para la tienda.
+const collection = await getActiveCollection(db, store.id, Astro.params.slug ?? '');
+if (!collection) return Astro.rewrite('/404');
+const products = await listCollectionProducts(db, collection.id);
+
+const until = collection.endsAt
+  ? new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'long', timeZone: 'America/Bogota' }).format(collection.endsAt)
+  : null;
+---
+
+<StoreLayout
+  title={`${collection.name} — ${store.name}`}
+  description={collection.description.slice(0, 160) || `Colección ${collection.name} de ${store.name}.`}
+  image={collection.image ? Astro.url.origin + collection.image : undefined}
+>
+  <section class="band band-season head">
+    <Badge>{until ? `Disponible hasta el ${until}` : 'Colección'}</Badge>
+    <h1 class="heading-lg">{collection.name}</h1>
+    {collection.description && <p class="body-lg">{collection.description}</p>}
+  </section>
+  <section class="band">
+    <ProductGrid products={products} headingLevel="h2" empty="Estamos preparando los productos de esta colección." />
+  </section>
+</StoreLayout>
+
+<style>
+  .head {
+    display: grid;
+    justify-items: center;
+    gap: var(--spacing-20);
+    text-align: center;
+  }
+  .body-lg {
+    max-width: 560px;
+    white-space: pre-line;
+  }
+</style>

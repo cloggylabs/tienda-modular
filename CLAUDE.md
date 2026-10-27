@@ -18,6 +18,10 @@ Ecommerce multi-tienda (Artelicat y Pochi Craft 3D) en Astro 7 + Cloudflare Work
 - El archivo de la base local depende del `database_id` de `wrangler.jsonc`; si cambia, la base local queda en otro archivo.
 - Un bloque nuevo se define en tres lugares: `blocks.ts` (tipos), `components/` + `BlockRenderer.astro`, y `fields.ts` (campos del panel).
 
+- Precios: enteros en COP; mostrar siempre con `formatCOP` y leer del formulario con `parsePrice`.
+- Lo que ve la tienda pasa por las consultas «activas» de `catalogo/repo.ts` (solo publicado y colecciones vigentes); el panel usa las versiones `*Admin`/`list*`.
+- Pruebas con Playwright en `astro dev`: la barra de desarrollo de Astro tiene su propio DOM y Playwright busca dentro; usa selectores específicos (`li.item`, ids).
+
 ## Comandos
 - `npm run dev` · `npm run build` (incluye `astro check`) · `npm run db:reset:local`
 - Vista previa de otra tienda en local: `/?tienda=pochi-craft-3d`

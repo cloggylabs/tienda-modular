@@ -1,0 +1,340 @@
+---
+import AdminLayout from '../../../../../layouts/AdminLayout.astro';
+import Errors from '../../../../../components/admin/Errors.astro';
+import MediaMultiPicker from '../../../../../components/admin/MediaMultiPicker.astro';
+import { getDb } from '../../../../../lib/db';
+import { getStoreBySlug } from '../../../../../modules/tiendas/repo';
+import { listMedia } from '../../../../../modules/medios/repo';
+import {
+  deleteProduct,
+  getProduct,
+  getProductCollectionIds,
+  listCategories,
+  listCollections,
+  saveProduct,
+  slugTaken,
+} from '../../../../../modules/catalogo/repo';
+import { collectionStatus, STATUS_LABELS } from '../../../../../modules/catalogo/format';
+import { MAX_IMAGES, MAX_VARIANTS, parseProductForm } from '../../../../../modules/catalogo/validate';
+import type { Product } from '../../../../../db/schema';
+
+const db = getDb();
+const store = await getStoreBySlug(db, Astro.params.slug!);
+if (!store) return new Response(null, { status: 404 });
+const base = `/admin/tiendas/${store.slug}/productos`;
+
+const isNew = Astro.params.id === 'nuevo';
+const existing = isNew ? undefined : await getProduct(db, store.id, Number(Astro.params.id));
+if (!isNew && !existing) return new Response(null, { status: 404 });
+
+const [categories, collections, media] = await Promise.all([
+  listCategories(db, store.id),
+  listCollections(db, store.id),
+  listMedia(db, store.id),
+]);
+
+type Values = Partial<Product> & { collectionIds: number[] };
+let values: Values = existing
+  ? { ...existing, collectionIds: await getProductCollectionIds(db, existing.id) }
+  : {
+      status: 'draft',
+      availability: 'made_to_order',
+      productionDays: '3 a 5 días hábiles',
+      images: [],
+      variants: [],
+      collectionIds: [],
+    };
+let errors: string[] = [];
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  if (form.get('action') === 'delete' && existing) {
+    await deleteProduct(db, store.id, existing.id);
+    return Astro.redirect(`${base}?borrado=1`);
+  }
+  const result = parseProductForm(form, { storeId: store.id, categoryIds: categories.map((c) => c.id) });
+  if (result.ok) {
+    if (await slugTaken(db, 'products', store.id, result.input.slug, existing?.id)) {
+      errors = [`Dirección: ya hay otro producto con «${result.input.slug}». Cambia el nombre o la dirección.`];
+      values = { ...result.input, collectionIds: result.collectionIds };
+    } else {
+      const id = await saveProduct(db, store.id, existing?.id ?? null, result.input, result.collectionIds);
+      return Astro.redirect(`${base}/${id}?guardado=1`);
+    }
+  } else {
+    errors = result.errors;
+    values = result.draft;
+  }
+}
+
+const ok = Astro.url.searchParams.has('guardado')
+  ? values.status === 'active'
+    ? 'Producto guardado y publicado.'
+    : 'Producto guardado. Aún no se ve en la tienda: cambia el estado a «Publicado» cuando esté listo.'
+  : null;
+const money = (n?: number | null) => (n ? n.toLocaleString('es-CO') : '');
+const variantRows = Array.from({ length: MAX_VARIANTS }, (_, i) => values.variants?.[i]);
+const title = isNew ? 'Nuevo producto' : (existing?.name ?? 'Producto');
+---
+
+<AdminLayout title={title} current={store.slug} section="productos">
+  <div class="stack">
+    <a class="button link back" href={base}>← Productos</a>
+    <h1>{title}</h1>
+  </div>
+  <Errors errors={errors} ok={ok} />
+
+  <form method="post" class="stack" id="product-form">
+    <section class="card">
+      <h2>Información</h2>
+      <label class="field">
+        <span>Nombre</span>
+        <input type="text" name="name" value={values.name ?? ''} required maxlength="120" data-name />
+      </label>
+      <label class="field">
+        <span>Dirección en la tienda</span>
+        <div class="slug">
+          <span class="muted">/producto/</span>
+          <input type="text" name="slug" value={values.slug ?? ''} maxlength="60" pattern="[a-z0-9-]+" data-slug data-touched={isNew ? undefined : ''} />
+        </div>
+        <small>Se arma sola a partir del nombre. Si la cambias después, los enlaces compartidos dejarán de funcionar.</small>
+      </label>
+      <label class="field">
+        <span>Descripción</span>
+        <textarea name="description" rows="6" maxlength="3000">{values.description ?? ''}</textarea>
+        <small>Materiales, medidas, cuidados. Deja una línea en blanco entre párrafos.</small>
+      </label>
+    </section>
+
+    <section class="card">
+      <h2>Precio</h2>
+      <div class="grid-2">
+        <label class="field">
+          <span>Precio (COP)</span>
+          <input type="text" name="price" value={money(values.price)} required inputmode="numeric" placeholder="25.000" />
+        </label>
+        <label class="field">
+          <span>Precio anterior (opcional)</span>
+          <input type="text" name="compareAtPrice" value={money(values.compareAtPrice)} inputmode="numeric" placeholder="30.000" />
+          <small>Si lo llenas, la tienda muestra el producto en oferta.</small>
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <MediaMultiPicker media={media} selected={values.images ?? []} slug={store.slug} max={MAX_IMAGES} />
+    </section>
+
+    <section class="card">
+      <h2>Organización</h2>
+      <fieldset class="plain">
+        <legend>Estado</legend>
+        <div class="row">
+          {
+            Object.entries(STATUS_LABELS).map(([key, label]) => (
+              <label class="check">
+                <input type="radio" name="status" value={key} checked={values.status === key} />
+                {label}
+              </label>
+            ))
+          }
+        </div>
+        <small class="muted">Borrador: solo lo ves tú. Publicado: se ve en la tienda. Archivado: se oculta sin borrarlo.</small>
+      </fieldset>
+      <label class="field">
+        <span>Categoría</span>
+        <select name="categoryId">
+          <option value="">Sin categoría</option>
+          {categories.map((c) => <option value={c.id} selected={values.categoryId === c.id}>{c.name}</option>)}
+        </select>
+        {categories.length === 0 && <small>Crea categorías en <a href={`/admin/tiendas/${store.slug}/categorias`}>Categorías</a>.</small>}
+      </label>
+      {
+        collections.length > 0 && (
+          <fieldset class="plain">
+            <legend>Colecciones</legend>
+            <div class="row">
+              {collections.map((c) => (
+                <label class="check">
+                  <input type="checkbox" name="collections" value={c.id} checked={values.collectionIds.includes(c.id)} />
+                  {c.name} <span class="muted">({collectionStatus(c).toLowerCase()})</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )
+      }
+      <label class="check">
+        <input type="checkbox" name="featured" checked={Boolean(values.featured)} />
+        Destacado (sale primero y en el bloque «Productos destacados»)
+      </label>
+    </section>
+
+    <section class="card">
+      <h2>Disponibilidad</h2>
+      <div class="row">
+        <label class="check">
+          <input type="radio" name="availability" value="made_to_order" checked={values.availability !== 'stock'} data-availability />
+          Hecho por pedido
+        </label>
+        <label class="check">
+          <input type="radio" name="availability" value="stock" checked={values.availability === 'stock'} data-availability />
+          Con stock (unidades contadas)
+        </label>
+      </div>
+      <label class="field" data-when="made_to_order">
+        <span>Tiempo de producción</span>
+        <input type="text" name="productionDays" value={values.productionDays ?? ''} maxlength="40" placeholder="3 a 5 días hábiles" />
+      </label>
+      <label class="field" data-when="stock" data-no-variants>
+        <span>Unidades disponibles</span>
+        <input type="number" name="stock" value={values.stock ?? ''} min="0" max="100000" />
+        <small>Si el producto tiene variantes, el stock se indica en cada una.</small>
+      </label>
+    </section>
+
+    <section class="card">
+      <h2>Variantes (opcional)</h2>
+      <p class="muted">Úsalas para colores, tamaños o diseños. Deja el precio vacío para usar el del producto.</p>
+      <div class="variants">
+        {
+          variantRows.map((v, i) => (
+            <div class="variant" data-empty={v ? undefined : ''}>
+              <input type="hidden" name={`v.${i}.id`} value={v?.id ?? ''} />
+              <label class="field">
+                <span>Nombre</span>
+                <input type="text" name={`v.${i}.name`} value={v?.name ?? ''} maxlength="60" placeholder="Morado" />
+              </label>
+              <label class="field">
+                <span>Precio propio</span>
+                <input type="text" name={`v.${i}.price`} value={money(v?.price)} inputmode="numeric" />
+              </label>
+              <label class="field" data-when="stock">
+                <span>Stock</span>
+                <input type="number" name={`v.${i}.stock`} value={v?.stock ?? ''} min="0" max="100000" />
+              </label>
+            </div>
+          ))
+        }
+      </div>
+      <button type="button" class="button link" data-more-variants>+ Agregar variante</button>
+    </section>
+
+    <div class="row">
+      <button class="button" type="submit">{isNew ? 'Crear producto' : 'Guardar'}</button>
+      {
+        existing?.status === 'active' && (
+          <a class="button link" href={`/producto/${existing.slug}?tienda=${store.slug}`} target="_blank" rel="noopener">
+            Ver en la tienda ↗
+          </a>
+        )
+      }
+    </div>
+  </form>
+
+  {
+    existing && (
+      <form method="post" class="card danger-zone">
+        <h2>Eliminar producto</h2>
+        <p class="muted">Si solo quieres ocultarlo, cámbialo a «Archivado». Eliminarlo no se puede deshacer.</p>
+        <div>
+          <button class="button secondary danger" name="action" value="delete" data-confirm="¿Eliminar este producto? No se puede deshacer.">
+            Eliminar
+          </button>
+        </div>
+      </form>
+    )
+  }
+</AdminLayout>
+
+<script>
+  const form = document.getElementById('product-form') as HTMLFormElement;
+
+  // Dirección automática a partir del nombre mientras no se edite a mano.
+  const name = form.querySelector<HTMLInputElement>('[data-name]')!;
+  const slug = form.querySelector<HTMLInputElement>('[data-slug]')!;
+  const toSlug = (t: string) =>
+    t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+  slug.addEventListener('input', () => (slug.dataset.touched = ''));
+  name.addEventListener('input', () => {
+    if (!('touched' in slug.dataset)) slug.value = toSlug(name.value);
+  });
+
+  // Campos según la disponibilidad elegida y si hay variantes.
+  const syncAvailability = () => {
+    const mode = form.querySelector<HTMLInputElement>('[data-availability]:checked')?.value ?? 'made_to_order';
+    const hasVariants = [...form.querySelectorAll<HTMLInputElement>('input[name$=".name"]')].some((i) => i.value.trim());
+    form.querySelectorAll<HTMLElement>('[data-when]').forEach((el) => {
+      el.hidden = el.dataset.when !== mode || ('noVariants' in el.dataset && hasVariants);
+    });
+  };
+  form.addEventListener('input', syncAvailability);
+  syncAvailability();
+
+  // Variantes: muestra las filas usadas y una vacía; el resto bajo «Agregar variante».
+  const rows = [...form.querySelectorAll<HTMLElement>('.variant[data-empty]')];
+  const more = form.querySelector<HTMLButtonElement>('[data-more-variants]')!;
+  rows.slice(1).forEach((r) => (r.hidden = true));
+  more.hidden = rows.length <= 1;
+  more.addEventListener('click', () => {
+    const next = rows.find((r) => r.hidden);
+    if (next) {
+      next.hidden = false;
+      next.querySelector<HTMLInputElement>('input[type=text]')?.focus();
+    }
+    more.hidden = !rows.some((r) => r.hidden);
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-confirm]').forEach((button) =>
+    button.addEventListener('click', (event) => {
+      if (!confirm(button.dataset.confirm!)) event.preventDefault();
+    }),
+  );
+</script>
+
+<style>
+  .back {
+    justify-content: flex-start;
+    width: fit-content;
+  }
+  .slug {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .slug input {
+    flex: 1;
+  }
+  .plain {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .plain legend {
+    margin-bottom: 6px;
+    font-weight: 600;
+    font-size: 14px;
+  }
+  [hidden] {
+    display: none !important;
+  }
+  .variants {
+    display: grid;
+    gap: 10px;
+  }
+  .variant {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+    align-items: end;
+  }
+  .danger-zone {
+    border-color: var(--a-err-bg);
+  }
+  .danger {
+    border-color: var(--a-err);
+    color: var(--a-err);
+  }
+</style>

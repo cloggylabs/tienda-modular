@@ -20,7 +20,10 @@ export type Field =
   | { kind: 'image'; name: string; label: string; help?: string }
   | { kind: 'select'; name: string; label: string; help?: string; options: Record<string, string> }
   | { kind: 'checkbox'; name: string; label: string; help?: string }
-  | { kind: 'datetime'; name: string; label: string; help?: string };
+  | { kind: 'datetime'; name: string; label: string; help?: string }
+  | { kind: 'number'; name: string; label: string; help?: string; min: number; max: number }
+  /** Elige una colección o categoría existente de la tienda (por slug). */
+  | { kind: 'ref'; name: string; label: string; help?: string; ref: 'collection' | 'category' | 'any' };
 
 const ANCHOR_HELP = 'Opcional. Una palabra sin espacios (ej. hacemos) para enlazarla desde el menú como #hacemos.';
 
@@ -87,6 +90,25 @@ export const BLOCK_FIELDS: { [K in BlockType]: Field[] } = {
     },
     { kind: 'link', name: 'cta', label: 'Botón' },
   ],
+  products: [
+    { kind: 'text', name: 'badge', label: 'Etiqueta superior', max: 60 },
+    { kind: 'text', name: 'title', label: 'Titular', required: true, max: 80 },
+    {
+      kind: 'select',
+      name: 'source',
+      label: 'Qué productos mostrar',
+      options: {
+        featured: 'Destacados',
+        latest: 'Los más recientes',
+        collection: 'Los de una colección',
+        category: 'Los de una categoría',
+      },
+    },
+    { kind: 'ref', name: 'ref', label: 'Colección o categoría', ref: 'any', help: 'Solo aplica si elegiste una colección o una categoría.' },
+    { kind: 'number', name: 'limit', label: 'Cuántos mostrar', min: 2, max: 12 },
+    { kind: 'text', name: 'linkLabel', label: 'Texto del enlace «ver todo»', help: 'Vacío lo oculta.', max: 40 },
+    { kind: 'select', name: 'tone', label: 'Fondo', options: { canvas: 'Fondo de la tienda', surface: 'Superficie' } },
+  ],
 };
 
 /** Contenido de un bloque recién creado, para que nunca nazca vacío. */
@@ -123,6 +145,13 @@ export const BLOCK_DEFAULTS: { [K in BlockType]: BlockPropsByType[K] } = {
     title: 'Tres pasos y es tuyo.',
     steps: [{ title: 'Escríbenos', body: 'Cuéntanos qué quieres por WhatsApp.' }],
     cta: { to: 'whatsapp', label: 'Hacer mi pedido' },
+  },
+  products: {
+    badge: 'Catálogo',
+    title: 'Los favoritos de la casa',
+    source: 'featured',
+    limit: 4,
+    linkLabel: 'Ver todo el catálogo',
   },
 };
 
@@ -258,6 +287,20 @@ export function parseBlockForm<K extends BlockType>(type: K, form: FormData): Pa
       case 'checkbox':
         if (form.get(`f.${field.name}`) === 'on') props[field.name] = true;
         break;
+      case 'number': {
+        const raw = get(field.name);
+        const n = Number(raw);
+        if (!raw || !Number.isInteger(n) || n < field.min || n > field.max)
+          errors.push(`${field.label}: debe ser un número entre ${field.min} y ${field.max}.`);
+        props[field.name] = Number.isInteger(n) ? n : field.min;
+        break;
+      }
+      case 'ref': {
+        const v = get(field.name);
+        if (v && !/^(collection|category):[a-z0-9-]{1,60}$/.test(v)) errors.push(`${field.label}: opción no válida.`);
+        if (v) props[field.name] = v;
+        break;
+      }
       case 'datetime': {
         const iso = localInputToIso(get(field.name));
         if (iso === null) errors.push(`${field.label}: fecha no válida.`);
@@ -265,6 +308,15 @@ export function parseBlockForm<K extends BlockType>(type: K, form: FormData): Pa
         break;
       }
     }
+  }
+
+  if (type === 'products') {
+    const source = props.source as string;
+    const ref = String(props.ref ?? '');
+    if ((source === 'collection' || source === 'category') && !ref.startsWith(`${source}:`)) {
+      errors.push(`Colección o categoría: elige ${source === 'collection' ? 'una colección' : 'una categoría'}.`);
+    }
+    if (source !== 'collection' && source !== 'category') delete props.ref;
   }
 
   if (type === 'promo' && props.startsAt && props.until && Date.parse(String(props.until)) <= Date.parse(String(props.startsAt))) {

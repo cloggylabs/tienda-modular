@@ -33,8 +33,11 @@ const user = Astro.locals.user!;
             </p>
           </div>
           <div class="row">
-            <a class="button" href={`/admin/tiendas/${s.slug}`}>
+            <a class="button secondary" href={`/admin/tiendas/${s.slug}`}>
               Ajustes
+            </a>
+            <a class="button secondary" href={`/admin/tiendas/${s.slug}/productos`}>
+              Productos
             </a>
             <a class="button secondary" href={`/admin/tiendas/${s.slug}/contenido`}>
               Contenido

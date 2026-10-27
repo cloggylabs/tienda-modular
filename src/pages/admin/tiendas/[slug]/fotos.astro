@@ -3,7 +3,6 @@ import AdminLayout from '../../../../layouts/AdminLayout.astro';
 import Errors from '../../../../components/admin/Errors.astro';
 import { getDb } from '../../../../lib/db';
 import { getStoreBySlug } from '../../../../modules/tiendas/repo';
-import { BLOCK_LABELS } from '../../../../modules/contenido/blocks';
 import {
   ALLOWED_TYPES,
   deleteMedia,
@@ -57,9 +56,7 @@ if (Astro.request.method === 'POST') {
   if (item && action === 'delete') {
     const usage = await mediaUsage(db, store.id, item);
     if (usage.length) {
-      errors.push(
-        `Esa foto se usa en: ${usage.map((u) => BLOCK_LABELS[u.type] ?? u.type).join(', ')}. Cámbiala en esos bloques antes de borrarla.`,
-      );
+      errors.push(`Esa foto se usa en ${usage.join(', ')}. Quítala de ahí antes de borrarla.`);
     } else {
       await deleteMedia(db, store.id, item);
       return Astro.redirect(`${self}?borrada=1`);

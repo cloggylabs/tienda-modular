@@ -22,11 +22,16 @@ import { DEFAULT_THEME } from '../modules/tema/defaults';
 interface Props {
   title?: string;
   description?: string;
+  /** URL absoluta de la imagen para compartir (og:image). */
+  image?: string;
 }
 
 const store = Astro.locals.store!;
-const { title = store.tagline ? `${store.name} — ${store.tagline}` : store.name, description = store.description } =
-  Astro.props;
+const {
+  title = store.tagline ? `${store.name} — ${store.tagline}` : store.name,
+  description = store.description,
+  image,
+} = Astro.props;
 
 // El tema ya se valida al guardarlo; se valida otra vez aquí porque termina dentro de un <style>.
 const checked = validateTheme(store.theme);
@@ -51,6 +56,8 @@ const canonical = new URL(Astro.url.pathname, Astro.url.origin);
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
+    {image && <meta property="og:image" content={image} />}
+    <meta name="twitter:card" content={image ? 'summary_large_image' : 'summary'} />
     <style set:html={themeCss}></style>
   </head>
   <body>

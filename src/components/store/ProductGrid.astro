@@ -1,0 +1,52 @@
+---
+import type { Product } from '../../db/schema';
+import ProductCard from './ProductCard.astro';
+
+interface Props {
+  products: Product[];
+  headingLevel?: 'h2' | 'h3';
+  empty?: string;
+}
+const { products, headingLevel, empty = 'Pronto habrá productos aquí.' } = Astro.props;
+---
+
+{
+  products.length ? (
+    <ul class="grid">
+      {products.map((p) => (
+        <li>
+          <ProductCard product={p} headingLevel={headingLevel} />
+        </li>
+      ))}
+    </ul>
+  ) : (
+    <p class="empty">{empty}</p>
+  )
+}
+
+<style>
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--spacing-30) var(--spacing-16);
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0;
+    list-style: none;
+  }
+  .empty {
+    text-align: center;
+  }
+  @media (min-width: 720px) {
+    .grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--spacing-48) var(--spacing-30);
+    }
+  }
+  @media (min-width: 1100px) {
+    .grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+</style>

@@ -52,12 +52,26 @@ export interface HowToBuyProps {
   cta: LinkTarget;
 }
 
+export interface ProductsProps {
+  badge: string;
+  title: string;
+  /** De dónde salen los productos. */
+  source: 'featured' | 'latest' | 'collection' | 'category';
+  /** slug de la colección o categoría cuando aplica. */
+  ref?: string;
+  limit: number;
+  /** Texto del enlace «ver todo»; vacío lo oculta. */
+  linkLabel?: string;
+  tone?: 'canvas' | 'surface';
+}
+
 export interface BlockPropsByType {
   hero: HeroProps;
   promo: PromoProps;
   split: SplitProps;
   keywords: KeywordsProps;
   how_to_buy: HowToBuyProps;
+  products: ProductsProps;
 }
 export type BlockType = keyof BlockPropsByType;
 export type BlockProps = BlockPropsByType[BlockType];
@@ -68,6 +82,7 @@ export const BLOCK_LABELS: Record<BlockType, string> = {
   split: 'Sección con imagen',
   keywords: 'Nube de palabras',
   how_to_buy: 'Cómo comprar',
+  products: 'Productos',
 };
 
 /** Una promo se muestra solo entre startsAt y until (si están definidos). */

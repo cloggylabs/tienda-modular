@@ -1,0 +1,86 @@
+---
+import type { Product } from '../../db/schema';
+import { formatCOP, priceLabel, stockState } from '../../modules/catalogo/format';
+import ImageSlot from './ImageSlot.astro';
+
+interface Props {
+  product: Product;
+  /** Encabezado del nombre según el nivel de la página. */
+  headingLevel?: 'h2' | 'h3';
+}
+const { product, headingLevel = 'h3' } = Astro.props;
+const Heading = headingLevel;
+const state = stockState(product);
+const onSale = product.compareAtPrice && product.compareAtPrice > product.price && !product.variants.some((v) => v.price);
+---
+
+<article class="card">
+  <a class="media" href={`/producto/${product.slug}`} tabindex="-1" aria-hidden="true">
+    <ImageSlot src={product.images[0]} alt="" label={product.name} />
+    {!state.available && <span class="flag">Agotado</span>}
+    {state.available && onSale && <span class="flag sale">Oferta</span>}
+  </a>
+  <Heading class="name"><a href={`/producto/${product.slug}`}>{product.name}</a></Heading>
+  <p class="price">
+    {onSale && <s>{formatCOP(product.compareAtPrice!)}</s>}
+    <span>{priceLabel(product)}</span>
+  </p>
+</article>
+
+<style>
+  .card {
+    display: grid;
+    align-content: start;
+    gap: var(--spacing-8);
+  }
+  .media {
+    position: relative;
+    display: block;
+  }
+  .media :global(.placeholder) {
+    font-size: 22px;
+  }
+  .flag {
+    position: absolute;
+    top: var(--spacing-12);
+    left: var(--spacing-12);
+    padding: var(--spacing-4) var(--spacing-10);
+    border: 1px solid var(--color-ink);
+    border-radius: var(--radius-pills);
+    background: var(--color-canvas);
+    font-family: var(--font-badge);
+    font-variant-ligatures: var(--ligatures-badge);
+    font-size: var(--text-caption);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .flag.sale {
+    background: var(--color-cta);
+  }
+  .name {
+    margin-top: var(--spacing-4);
+    font-family: var(--font-body);
+    font-variant-ligatures: var(--ligatures-body);
+    font-size: var(--text-body-lg);
+    font-weight: var(--font-weight-medium);
+    line-height: 1.25;
+    letter-spacing: 0;
+  }
+  .name a {
+    text-decoration: none;
+  }
+  .name a:hover {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .price {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-8);
+    align-items: baseline;
+  }
+  s {
+    opacity: 0.65;
+    font-size: var(--text-caption);
+  }
+</style>

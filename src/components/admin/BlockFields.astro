@@ -5,13 +5,19 @@ import type { BlockType } from '../../modules/contenido/blocks';
 import { BLOCK_FIELDS, isoToLocalInput } from '../../modules/contenido/fields';
 import { mediaUrl } from '../../modules/medios/repo';
 
+interface RefOption {
+  slug: string;
+  name: string;
+}
 interface Props {
   type: BlockType;
   values: Record<string, any>;
   media: Media[];
   slug: string;
+  /** Colecciones y categorías de la tienda para los campos de referencia. */
+  refs?: { collections: RefOption[]; categories: RefOption[] };
 }
-const { type, values, media, slug } = Astro.props;
+const { type, values, media, slug, refs = { collections: [], categories: [] } } = Astro.props;
 const fields = BLOCK_FIELDS[type];
 const LINK_TARGETS = { whatsapp: 'WhatsApp', instagram: 'Instagram', url: 'Sección o dirección web' };
 ---
@@ -206,6 +212,48 @@ const LINK_TARGETS = { whatsapp: 'WhatsApp', instagram: 'Instagram', url: 'Secci
           <label class="check">
             <input type="checkbox" name={`f.${field.name}`} checked={Boolean(v)} />
             {field.label}
+          </label>
+        );
+      case 'number':
+        return (
+          <label class="field">
+            <span>{field.label}</span>
+            <input type="number" name={`f.${field.name}`} value={v ?? field.min} min={field.min} max={field.max} required />
+            {field.help && <small>{field.help}</small>}
+          </label>
+        );
+      case 'ref':
+        return (
+          <label class="field">
+            <span>{field.label}</span>
+            <select name={`f.${field.name}`}>
+              <option value="">Ninguna</option>
+              {refs.collections.length > 0 && (
+                <optgroup label="Colecciones">
+                  {refs.collections.map((c) => (
+                    <option value={`collection:${c.slug}`} selected={v === `collection:${c.slug}`}>
+                      {c.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {refs.categories.length > 0 && (
+                <optgroup label="Categorías">
+                  {refs.categories.map((c) => (
+                    <option value={`category:${c.slug}`} selected={v === `category:${c.slug}`}>
+                      {c.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+            {field.help && <small>{field.help}</small>}
+            {refs.collections.length + refs.categories.length === 0 && (
+              <small>
+                Aún no hay colecciones ni categorías. Créalas en <a href={`/admin/tiendas/${slug}/colecciones`}>Colecciones</a> o{' '}
+                <a href={`/admin/tiendas/${slug}/categorias`}>Categorías</a>.
+              </small>
+            )}
           </label>
         );
       case 'datetime':

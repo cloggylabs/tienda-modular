@@ -1,0 +1,163 @@
+---
+import AdminLayout from '../../../../../layouts/AdminLayout.astro';
+import Errors from '../../../../../components/admin/Errors.astro';
+import { getDb } from '../../../../../lib/db';
+import { getStoreBySlug } from '../../../../../modules/tiendas/repo';
+import { listMedia, mediaUrl } from '../../../../../modules/medios/repo';
+import { deleteCollection, getCollection, saveCollection, slugTaken, type CollectionInput } from '../../../../../modules/catalogo/repo';
+import { collectionStatus } from '../../../../../modules/catalogo/format';
+import { dateToLocalInput, parseCollectionForm } from '../../../../../modules/catalogo/validate';
+
+const db = getDb();
+const store = await getStoreBySlug(db, Astro.params.slug!);
+if (!store) return new Response(null, { status: 404 });
+const base = `/admin/tiendas/${store.slug}/colecciones`;
+
+const isNew = Astro.params.id === 'nueva';
+const existing = isNew ? undefined : await getCollection(db, store.id, Number(Astro.params.id));
+if (!isNew && !existing) return new Response(null, { status: 404 });
+
+let values: CollectionInput = existing ?? {
+  name: '',
+  slug: '',
+  description: '',
+  image: null,
+  startsAt: null,
+  endsAt: null,
+  enabled: true,
+};
+let errors: string[] = [];
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  if (form.get('action') === 'delete' && existing) {
+    await deleteCollection(db, store.id, existing.id);
+    return Astro.redirect(`${base}?borrada=1`);
+  }
+  const result = parseCollectionForm(form, store.id);
+  if (result.ok && (await slugTaken(db, 'collections', store.id, result.input.slug, existing?.id))) {
+    errors = [`Dirección: ya hay otra colección con «${result.input.slug}».`];
+    values = result.input;
+  } else if (result.ok) {
+    const id = await saveCollection(db, store.id, existing?.id ?? null, result.input);
+    return Astro.redirect(`${base}/${id}?guardada=1`);
+  } else {
+    errors = result.errors;
+    values = result.draft;
+  }
+}
+
+const media = await listMedia(db, store.id);
+const ok = Astro.url.searchParams.has('guardada') ? `Colección guardada (${collectionStatus(values).toLowerCase()}).` : null;
+const title = isNew ? 'Nueva colección' : (existing?.name ?? 'Colección');
+---
+
+<AdminLayout title={title} current={store.slug} section="colecciones">
+  <div class="stack">
+    <a class="button link back" href={base}>← Colecciones</a>
+    <h1>{title}</h1>
+    {existing && <p class="muted">Para agregar productos, ábrelos en Productos y marca esta colección.</p>}
+  </div>
+  <Errors errors={errors} ok={ok} />
+
+  <form method="post" class="card stack">
+    <label class="field">
+      <span>Nombre</span>
+      <input type="text" name="name" value={values.name} required maxlength="80" placeholder="Navidad" data-name />
+    </label>
+    <label class="field">
+      <span>Dirección en la tienda</span>
+      <div class="slug">
+        <span class="muted">/coleccion/</span>
+        <input type="text" name="slug" value={values.slug} maxlength="60" pattern="[a-z0-9-]+" data-slug data-touched={isNew ? undefined : ''} />
+      </div>
+    </label>
+    <label class="field">
+      <span>Descripción</span>
+      <textarea name="description" rows="3" maxlength="1000">{values.description}</textarea>
+    </label>
+    <div class="grid-2">
+      <label class="field">
+        <span>Desde</span>
+        <input type="datetime-local" name="startsAt" value={dateToLocalInput(values.startsAt)} />
+        <small>Hora de Colombia. Vacío: desde ya.</small>
+      </label>
+      <label class="field">
+        <span>Hasta</span>
+        <input type="datetime-local" name="endsAt" value={dateToLocalInput(values.endsAt)} />
+        <small>Vacío: sin fecha de fin.</small>
+      </label>
+    </div>
+    <label class="field">
+      <span>Imagen para compartir (opcional)</span>
+      <select name="image">
+        <option value="">Sin imagen</option>
+        {media.map((m) => <option value={mediaUrl(m)} selected={values.image === mediaUrl(m)}>{m.alt || m.filename}</option>)}
+      </select>
+      <small>Es la que aparece al compartir el enlace de la colección por WhatsApp o redes.</small>
+    </label>
+    <label class="check">
+      <input type="checkbox" name="enabled" checked={values.enabled} />
+      Visible (si la desmarcas, la colección se oculta aunque esté dentro de sus fechas)
+    </label>
+    <div class="row">
+      <button class="button" type="submit">{isNew ? 'Crear colección' : 'Guardar'}</button>
+      {
+        existing && collectionStatus(existing) === 'Activa' && (
+          <a class="button link" href={`/coleccion/${existing.slug}?tienda=${store.slug}`} target="_blank" rel="noopener">
+            Ver en la tienda ↗
+          </a>
+        )
+      }
+    </div>
+  </form>
+
+  {
+    existing && (
+      <form method="post" class="card">
+        <h2>Eliminar colección</h2>
+        <p class="muted">Los productos no se borran: solo dejan de pertenecer a esta colección.</p>
+        <div>
+          <button class="button secondary danger" name="action" value="delete" data-confirm="¿Eliminar esta colección?">
+            Eliminar
+          </button>
+        </div>
+      </form>
+    )
+  }
+</AdminLayout>
+
+<script>
+  const name = document.querySelector<HTMLInputElement>('[data-name]')!;
+  const slug = document.querySelector<HTMLInputElement>('[data-slug]')!;
+  const toSlug = (t: string) =>
+    t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+  slug.addEventListener('input', () => (slug.dataset.touched = ''));
+  name.addEventListener('input', () => {
+    if (!('touched' in slug.dataset)) slug.value = toSlug(name.value);
+  });
+  document.querySelectorAll<HTMLButtonElement>('[data-confirm]').forEach((button) =>
+    button.addEventListener('click', (event) => {
+      if (!confirm(button.dataset.confirm!)) event.preventDefault();
+    }),
+  );
+</script>
+
+<style>
+  .back {
+    justify-content: flex-start;
+    width: fit-content;
+  }
+  .slug {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .slug input {
+    flex: 1;
+  }
+  .danger {
+    border-color: var(--a-err);
+    color: var(--a-err);
+  }
+</style>

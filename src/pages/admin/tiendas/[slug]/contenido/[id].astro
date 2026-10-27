@@ -8,6 +8,7 @@ import { BLOCK_LABELS } from '../../../../../modules/contenido/blocks';
 import { BLOCK_FIELDS, parseBlockForm } from '../../../../../modules/contenido/fields';
 import { getBlock, updateBlockProps } from '../../../../../modules/contenido/repo';
 import { listMedia } from '../../../../../modules/medios/repo';
+import { listCategories, listCollections } from '../../../../../modules/catalogo/repo';
 
 const db = getDb();
 const store = await getStoreBySlug(db, Astro.params.slug!);
@@ -38,7 +39,15 @@ if (Astro.request.method === 'POST') {
   }
 }
 
-const media = await listMedia(db, store.id);
+const [media, collections, categories] = await Promise.all([
+  listMedia(db, store.id),
+  listCollections(db, store.id),
+  listCategories(db, store.id),
+]);
+const refs = {
+  collections: collections.map((c) => ({ slug: c.slug, name: c.name })),
+  categories: categories.map((c) => ({ slug: c.slug, name: c.name })),
+};
 const ok = Astro.url.searchParams.has('guardado')
   ? 'Bloque guardado. Ya se ve en la tienda.'
   : Astro.url.searchParams.has('nuevo')
@@ -55,7 +64,7 @@ const ok = Astro.url.searchParams.has('guardado')
   <Errors errors={errors} ok={ok} />
 
   <form method="post" class="card stack">
-    <BlockFields type={block.type} values={values} media={media} slug={store.slug} />
+    <BlockFields type={block.type} values={values} media={media} slug={store.slug} refs={refs} />
     <div class="row">
       <button class="button" type="submit">Guardar</button>
       <a class="button link" href={`/?tienda=${store.slug}`} target="_blank" rel="noopener">Ver tienda ↗</a>

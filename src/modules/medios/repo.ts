@@ -1,7 +1,8 @@
 // Fotos de cada tienda: el archivo va a R2 (binding MEDIA) y sus datos a la tabla media.
 import { env } from 'cloudflare:workers';
 import { and, desc, eq, sql } from 'drizzle-orm';
-import { blocks, media, type Media } from '../../db/schema';
+import { blocks, collections, media, products, type Media } from '../../db/schema';
+import { BLOCK_LABELS } from '../contenido/blocks';
 import type { Db } from '../../lib/db';
 
 /** Tipos aceptados. SVG queda fuera a propósito: puede contener scripts. */
@@ -82,15 +83,33 @@ export async function updateMediaAlt(db: Db, storeId: number, id: number, alt: s
     .where(and(eq(media.id, id), eq(media.storeId, storeId)));
 }
 
-/** Bloques que usan esta foto (para no borrar algo que se está mostrando). */
-export async function mediaUsage(db: Db, storeId: number, m: Media) {
-  return db
-    .select({ id: blocks.id, type: blocks.type })
-    .from(blocks)
-    // instr() y no LIKE: D1 limita los patrones de LIKE a 50 caracteres y la ruta de una foto es más larga.
-    // (Además, like() de Drizzle convertiría el patrón a JSON por ser una columna JSON.)
-    .where(and(eq(blocks.storeId, storeId), sql`instr(${blocks.props}, ${mediaUrl(m)}) > 0`))
-    .all();
+/** Dónde se usa esta foto (bloques, productos, colecciones), para no borrar algo que se está mostrando. */
+export async function mediaUsage(db: Db, storeId: number, m: Media): Promise<string[]> {
+  const url = mediaUrl(m);
+  // instr() y no LIKE: D1 limita los patrones de LIKE a 50 caracteres y la ruta de una foto es más larga.
+  // (Además, like() de Drizzle convertiría el patrón a JSON por ser una columna JSON.)
+  const [b, p, c] = await Promise.all([
+    db
+      .select({ type: blocks.type })
+      .from(blocks)
+      .where(and(eq(blocks.storeId, storeId), sql`instr(${blocks.props}, ${url}) > 0`))
+      .all(),
+    db
+      .select({ name: products.name })
+      .from(products)
+      .where(and(eq(products.storeId, storeId), sql`instr(${products.images}, ${url}) > 0`))
+      .all(),
+    db
+      .select({ name: collections.name })
+      .from(collections)
+      .where(and(eq(collections.storeId, storeId), eq(collections.image, url)))
+      .all(),
+  ]);
+  return [
+    ...b.map((x) => `el bloque «${BLOCK_LABELS[x.type] ?? x.type}»`),
+    ...p.map((x) => `el producto «${x.name}»`),
+    ...c.map((x) => `la colección «${x.name}»`),
+  ];
 }
 
 export async function deleteMedia(db: Db, storeId: number, m: Media) {

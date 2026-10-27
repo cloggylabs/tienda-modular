@@ -1,0 +1,78 @@
+---
+import Badge from '../../../components/store/Badge.astro';
+import Icon from '../../../components/store/Icon.astro';
+import ProductGrid from '../../../components/store/ProductGrid.astro';
+import { getDb } from '../../../lib/db';
+import {
+  getActiveCollection,
+  getCategoryBySlug,
+  listActiveProducts,
+  listCollectionProducts,
+  listFeaturedProducts,
+} from '../../catalogo/repo';
+import type { Product } from '../../../db/schema';
+import type { ProductsProps } from '../blocks';
+
+type Props = ProductsProps;
+const { badge, title, source, ref = '', limit, linkLabel, tone = 'canvas' } = Astro.props;
+const db = getDb();
+const store = Astro.locals.store!;
+const slug = ref.split(':')[1] ?? '';
+
+let products: Product[] = [];
+let href = '/catalogo';
+if (source === 'featured') {
+  products = await listFeaturedProducts(db, store.id, limit);
+} else if (source === 'latest') {
+  products = await listActiveProducts(db, store.id, { limit });
+} else if (source === 'collection') {
+  // Si la colección terminó o se ocultó, el bloque desaparece solo.
+  const collection = slug ? await getActiveCollection(db, store.id, slug) : undefined;
+  if (collection) {
+    products = await listCollectionProducts(db, collection.id, limit);
+    href = `/coleccion/${collection.slug}`;
+  }
+} else if (source === 'category') {
+  const category = slug ? await getCategoryBySlug(db, store.id, slug) : undefined;
+  if (category) {
+    products = await listActiveProducts(db, store.id, { categoryId: category.id, limit });
+    href = `/catalogo?categoria=${category.slug}`;
+  }
+}
+---
+
+{
+  products.length > 0 && (
+    <section class:list={['products band', { 'band-surface': tone === 'surface' }]}>
+      <div class="head">
+        {badge && <Badge>{badge}</Badge>}
+        <h2 class="heading">{title}</h2>
+      </div>
+      <ProductGrid products={products} />
+      {linkLabel && (
+        <a class="text-link more" href={href}>
+          {linkLabel} <Icon name="arrow" size={16} />
+        </a>
+      )}
+    </section>
+  )
+}
+
+<style>
+  .products {
+    display: grid;
+    justify-items: center;
+    gap: var(--spacing-36);
+  }
+  .head {
+    display: grid;
+    justify-items: center;
+    gap: var(--spacing-16);
+    text-align: center;
+  }
+  .more {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-8);
+  }
+</style>

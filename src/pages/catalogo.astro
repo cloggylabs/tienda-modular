@@ -1,0 +1,90 @@
+---
+import StoreLayout from '../layouts/StoreLayout.astro';
+import Badge from '../components/store/Badge.astro';
+import ProductGrid from '../components/store/ProductGrid.astro';
+import { getDb } from '../lib/db';
+import { getCategoryBySlug, listActiveCollections, listActiveProducts, listCategories } from '../modules/catalogo/repo';
+
+const db = getDb();
+const store = Astro.locals.store!;
+const slug = Astro.url.searchParams.get('categoria') ?? '';
+const category = slug ? await getCategoryBySlug(db, store.id, slug) : undefined;
+if (slug && !category) return Astro.redirect('/catalogo');
+
+const [all, allCategories, collections] = await Promise.all([
+  listActiveProducts(db, store.id),
+  listCategories(db, store.id),
+  listActiveCollections(db, store.id),
+]);
+const products = category ? all.filter((p) => p.categoryId === category.id) : all;
+// Solo se muestran categorías con algún producto publicado.
+const withProducts = new Set(all.map((p) => p.categoryId));
+const chips = allCategories.filter((c) => withProducts.has(c.id));
+const title = category ? category.name : 'Catálogo';
+---
+
+<StoreLayout title={`${title} — ${store.name}`} description={`${title} de ${store.name}. ${store.tagline}`}>
+  <section class="band head">
+    <Badge>{store.name}</Badge>
+    <h1 class="heading-lg">{title}</h1>
+    {
+      (chips.length > 0 || collections.length > 0) && (
+        <nav class="chips" aria-label="Filtrar">
+          <a href="/catalogo" aria-current={!category ? 'page' : undefined}>
+            Todo
+          </a>
+          {chips.map((c) => (
+            <a href={`/catalogo?categoria=${c.slug}`} aria-current={category?.id === c.id ? 'page' : undefined}>
+              {c.name}
+            </a>
+          ))}
+          {collections.map((c) => (
+            <a class="season" href={`/coleccion/${c.slug}`}>
+              {c.name}
+            </a>
+          ))}
+        </nav>
+      )
+    }
+  </section>
+  <section class="band list">
+    <ProductGrid products={products} headingLevel="h2" empty="Pronto publicaremos productos. Mientras tanto, escríbenos por WhatsApp." />
+  </section>
+</StoreLayout>
+
+<style>
+  .head {
+    display: grid;
+    justify-items: center;
+    gap: var(--spacing-20);
+    padding-bottom: var(--spacing-24);
+    text-align: center;
+  }
+  .list {
+    padding-top: var(--spacing-24);
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--spacing-8);
+  }
+  .chips a {
+    padding: var(--spacing-8) var(--spacing-16);
+    border: 1px solid var(--color-ink);
+    border-radius: var(--radius-pills);
+    text-decoration: none;
+  }
+  .chips a:hover,
+  .chips a[aria-current='page'] {
+    background: var(--color-surface);
+  }
+  .chips a[aria-current='page'] {
+    font-weight: var(--font-weight-bold);
+  }
+  .chips .season {
+    background: var(--color-season);
+    border-color: var(--color-season);
+    color: var(--color-on-season);
+  }
+</style>

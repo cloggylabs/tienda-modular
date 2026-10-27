@@ -7,6 +7,7 @@ import Promo from './Promo.astro';
 import Split from './Split.astro';
 import Keywords from './Keywords.astro';
 import HowToBuy from './HowToBuy.astro';
+import Products from './Products.astro';
 
 interface Props {
   blocks: Block[];
@@ -29,6 +30,8 @@ const { blocks } = Astro.props;
         return <Keywords {...(block.props as BlockPropsByType['keywords'])} />;
       case 'how_to_buy':
         return <HowToBuy {...(block.props as BlockPropsByType['how_to_buy'])} />;
+      case 'products':
+        return <Products {...(block.props as BlockPropsByType['products'])} />;
       default:
         return null;
     }

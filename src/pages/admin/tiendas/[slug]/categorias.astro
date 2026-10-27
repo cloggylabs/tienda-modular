@@ -1,0 +1,124 @@
+---
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import Errors from '../../../../components/admin/Errors.astro';
+import { getDb } from '../../../../lib/db';
+import { getStoreBySlug } from '../../../../modules/tiendas/repo';
+import { categoryProductCounts, deleteCategory, listCategories, saveCategory, slugTaken } from '../../../../modules/catalogo/repo';
+import { SLUG, slugify } from '../../../../modules/catalogo/format';
+
+const db = getDb();
+const store = await getStoreBySlug(db, Astro.params.slug!);
+if (!store) return new Response(null, { status: 404 });
+const self = `/admin/tiendas/${store.slug}/categorias`;
+
+let errors: string[] = [];
+let draft = { name: '', slug: '' };
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('action') ?? '');
+  const id = Number(form.get('id')) || undefined;
+  const existing = id ? (await listCategories(db, store.id)).find((c) => c.id === id) : undefined;
+
+  if (action === 'delete' && existing) {
+    await deleteCategory(db, store.id, existing.id);
+    return Astro.redirect(`${self}?borrada=1`);
+  }
+  if (action === 'save' && (!id || existing)) {
+    const name = String(form.get('name') ?? '').trim();
+    const slug = (String(form.get('slug') ?? '').trim() || slugify(name)).toLowerCase();
+    const position = Number(form.get('position')) || 0;
+    if (!name || name.length > 60) errors.push('Nombre: es obligatorio y de máximo 60 caracteres.');
+    if (!SLUG.test(slug)) errors.push('Dirección: usa solo letras minúsculas sin tildes, números y guiones.');
+    else if (await slugTaken(db, 'categories', store.id, slug, id)) errors.push(`Ya existe una categoría con la dirección «${slug}».`);
+    if (!errors.length) {
+      await saveCategory(db, store.id, { id, name, slug, position });
+      return Astro.redirect(`${self}?guardada=1`);
+    }
+    if (!id) draft = { name, slug };
+  }
+}
+
+const [categories, counts] = await Promise.all([listCategories(db, store.id), categoryProductCounts(db, store.id)]);
+const params = Astro.url.searchParams;
+const ok = params.has('guardada') ? 'Categoría guardada.' : params.has('borrada') ? 'Categoría eliminada; sus productos quedaron sin categoría.' : null;
+---
+
+<AdminLayout title={`Categorías de ${store.name}`} current={store.slug} section="categorias">
+  <div class="stack">
+    <h1>Categorías</h1>
+    <p class="muted">Agrupan los productos de forma permanente (Llaveros, Stickers…) y sirven de filtro en el catálogo. Para temporadas usa Colecciones.</p>
+  </div>
+  <Errors errors={errors} ok={ok} />
+
+  {
+    categories.length > 0 && (
+      <div class="card">
+        {categories.map((c) => (
+          <form method="post" class="cat row">
+            <input type="hidden" name="id" value={c.id} />
+            <input type="text" name="name" value={c.name} aria-label="Nombre" maxlength="60" required />
+            <input type="text" name="slug" value={c.slug} aria-label="Dirección" maxlength="60" />
+            <input type="number" name="position" value={c.position} aria-label="Orden" />
+            <span class="muted count">{counts.get(c.id) ?? 0} productos</span>
+            <button class="button secondary" name="action" value="save">
+              Guardar
+            </button>
+            <button class="button link danger" name="action" value="delete" data-confirm={`¿Eliminar «${c.name}»? Sus productos quedarán sin categoría.`}>
+              Eliminar
+            </button>
+          </form>
+        ))}
+      </div>
+    )
+  }
+
+  <form method="post" class="card" id="nueva-categoria">
+    <h2>Nueva categoría</h2>
+    <div class="grid-2">
+      <label class="field">
+        <span>Nombre</span>
+        <input type="text" name="name" value={draft.name} required maxlength="60" placeholder="Llaveros" />
+      </label>
+      <label class="field">
+        <span>Dirección (opcional)</span>
+        <input type="text" name="slug" value={draft.slug} maxlength="60" placeholder="llaveros" />
+        <small>Se arma sola a partir del nombre.</small>
+      </label>
+    </div>
+    <input type="hidden" name="position" value={(categories.at(-1)?.position ?? 0) + 10} />
+    <div>
+      <button class="button" name="action" value="save">Agregar</button>
+    </div>
+  </form>
+</AdminLayout>
+
+<script>
+  document.querySelectorAll<HTMLButtonElement>('[data-confirm]').forEach((button) =>
+    button.addEventListener('click', (event) => {
+      if (!confirm(button.dataset.confirm!)) event.preventDefault();
+    }),
+  );
+</script>
+
+<style>
+  .cat {
+    padding: 10px 0;
+    border-top: 1px solid var(--a-line);
+  }
+  .cat input[name='name'] {
+    flex: 2 1 160px;
+  }
+  .cat input[name='slug'] {
+    flex: 2 1 140px;
+  }
+  .cat input[name='position'] {
+    flex: 0 0 80px;
+  }
+  .count {
+    font-size: 13px;
+  }
+  .danger {
+    color: var(--a-err);
+  }
+</style>

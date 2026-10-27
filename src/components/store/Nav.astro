@@ -1,20 +1,31 @@
 ---
 import Icon from './Icon.astro';
 import { instagramUrl, whatsappUrl } from '../../modules/tiendas/settings';
+import { countActiveProducts } from '../../modules/catalogo/repo';
+import { getDb } from '../../lib/db';
 
 const store = Astro.locals.store!;
 const { settings } = store;
+// «Catálogo» aparece solo cuando hay productos publicados (y si no está ya en el menú).
+const hasCatalog = (await countActiveProducts(getDb(), store.id)) > 0;
+const links = [
+  ...(hasCatalog && !settings.nav.some((l) => l.href.startsWith('/catalogo')) ? [{ label: 'Catálogo', href: '/catalogo' }] : []),
+  ...settings.nav,
+];
 ---
 
 <header class="nav">
   <a class="wordmark" href="/">{store.name}</a>
   {
-    settings.nav.length > 0 && (
+    links.length > 0 && (
       <nav aria-label="Principal" class="links">
-        {settings.nav.map((l) => <a href={l.href}>{l.label}</a>)}
+        {links.map((l) => (
+          <a href={l.href}>{l.label}</a>
+        ))}
       </nav>
     )
   }
+  {hasCatalog && <a class="catalog-mobile" href="/catalogo">Catálogo</a>}
   <div class="pills">
     {
       settings.instagram && (
@@ -62,6 +73,10 @@ const { settings } = store;
     text-decoration: underline;
     text-underline-offset: 4px;
   }
+  .catalog-mobile {
+    margin-left: auto;
+    font-size: 14px;
+  }
   .pills {
     display: flex;
     gap: var(--spacing-8);
@@ -96,6 +111,9 @@ const { settings } = store;
     .links {
       display: flex;
       margin-right: var(--spacing-20);
+    }
+    .catalog-mobile {
+      display: none;
     }
   }
 </style>

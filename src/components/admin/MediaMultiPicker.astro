@@ -1,0 +1,136 @@
+---
+// Selector de varias fotos de la biblioteca, con una marcada como principal.
+import type { Media } from '../../db/schema';
+import { mediaUrl } from '../../modules/medios/repo';
+
+interface Props {
+  media: Media[];
+  selected: string[];
+  slug: string;
+  max: number;
+}
+const { media, selected, slug, max } = Astro.props;
+// Las elegidas van primero, en su orden; luego el resto de la biblioteca.
+const chosen = selected.map((src) => media.find((m) => mediaUrl(m) === src)).filter((m): m is Media => Boolean(m));
+const rest = media.filter((m) => !selected.includes(mediaUrl(m)));
+const ordered = [...chosen, ...rest];
+---
+
+<fieldset class="group" data-multi data-max={max}>
+  <legend>Fotos</legend>
+  <small class="muted">Marca hasta {max}. La que tenga «Principal» se muestra en el catálogo.</small>
+  {
+    media.length === 0 ? (
+      <p class="muted">
+        Aún no hay fotos. <a href={`/admin/tiendas/${slug}/fotos`}>Súbelas en Fotos</a> y vuelve aquí.
+      </p>
+    ) : (
+      <div class="picker">
+        {ordered.map((m) => {
+          const src = mediaUrl(m);
+          const isChosen = selected.includes(src);
+          return (
+            <div class:list={['pick', { on: isChosen }]}>
+              <label class="select">
+                <input type="checkbox" name="images" value={src} checked={isChosen} />
+                <img src={src} alt={m.alt} loading="lazy" />
+              </label>
+              <label class="main">
+                <input type="radio" name="mainImage" value={src} checked={selected[0] === src} disabled={!isChosen} />
+                Principal
+              </label>
+            </div>
+          );
+        })}
+      </div>
+    )
+  }
+  <p class="limit" role="status" hidden>Llegaste al máximo de fotos.</p>
+</fieldset>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-multi]').forEach((group) => {
+    const max = Number(group.dataset.max);
+    const boxes = [...group.querySelectorAll<HTMLInputElement>('input[type=checkbox]')];
+    const limit = group.querySelector<HTMLElement>('.limit')!;
+    const sync = () => {
+      const count = boxes.filter((b) => b.checked).length;
+      for (const box of boxes) {
+        const pick = box.closest('.pick')!;
+        const radio = pick.querySelector<HTMLInputElement>('input[type=radio]')!;
+        pick.classList.toggle('on', box.checked);
+        radio.disabled = !box.checked;
+        if (!box.checked) radio.checked = false;
+        box.disabled = !box.checked && count >= max;
+      }
+      // Siempre hay una principal si hay fotos marcadas.
+      const radios = boxes.filter((b) => b.checked).map((b) => b.closest('.pick')!.querySelector<HTMLInputElement>('input[type=radio]')!);
+      if (radios.length && !radios.some((r) => r.checked)) radios[0]!.checked = true;
+      limit.hidden = count < max;
+    };
+    boxes.forEach((b) => b.addEventListener('change', sync));
+    sync();
+  });
+</script>
+
+<style>
+  .group {
+    display: grid;
+    gap: 12px;
+    margin: 0;
+    padding: 16px;
+    border: 1px solid var(--a-line);
+    border-radius: 8px;
+  }
+  legend {
+    padding: 0 6px;
+    font-weight: 600;
+    font-size: 14px;
+  }
+  .picker {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+    gap: 10px;
+  }
+  .pick {
+    display: grid;
+    gap: 4px;
+  }
+  .select {
+    position: relative;
+    display: block;
+    aspect-ratio: 4 / 5;
+    overflow: hidden;
+    border: 2px solid var(--a-line);
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .pick.on .select {
+    border-color: var(--a-accent);
+    box-shadow: 0 0 0 2px var(--a-accent);
+  }
+  .select input {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+  }
+  .select img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .main {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--a-muted);
+  }
+  .pick:not(.on) .main {
+    visibility: hidden;
+  }
+  .limit {
+    color: var(--a-muted);
+    font-size: 13px;
+  }
+</style>
