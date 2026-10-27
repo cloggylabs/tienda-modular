@@ -8,11 +8,7 @@
 - **Fase 2:** editor de bloques de contenido y biblioteca de fotos en R2.
 - **Fase 3:** catálogo con productos, variantes, categorías, colecciones por temporada y bloque «Productos» para el inicio.
 - **Fase 4:** carrito, checkout, pedidos y comprobantes de pago (ver README → «Carrito y pedidos»). Publicada el 27 de octubre de 2026.
-
-## Hecho, sin publicar todavía
-
-- Línea de tiempo de pedidos (Recibido, Confirmado, En preparación, En camino, Entregado, Cancelado) con historial de fechas; migración `0004_historial_pedidos` (aplicada solo en local; agrega al historial los pedidos que ya existen).
-- Botón para copiar el enlace público de productos y colecciones en el panel.
+- Línea de tiempo de pedidos (Recibido, Confirmado, En preparación, En camino, Entregado, Cancelado) con historial de fechas, y botón para copiar el enlace público de productos y colecciones. Publicado el 27 de octubre de 2026.
 
 En producción (Cloudflare, plan gratuito):
 
@@ -20,7 +16,7 @@ En producción (Cloudflare, plan gratuito):
 - Pochi Craft 3D: https://pochi-craft-3d.tienda-modular.workers.dev
 - Panel: `/admin` en cualquiera de las dos (una sola cuenta para ambas tiendas).
 - Base D1 `tienda-modular` (región ENAM), bucket R2 `tienda-modular-media`.
-- Migraciones aplicadas en producción: 0000_inicial, 0001_fotos, 0002_catalogo, 0003_pedidos.
+- Migraciones aplicadas en producción: 0000_inicial, 0001_fotos, 0002_catalogo, 0003_pedidos, 0004_historial_pedidos.
 - **Productos de prueba en producción** (publicados, con «(prueba)» en el nombre y dirección `prueba-…`): 4 en Artelicat y 3 en Pochi. Cubren variantes con precio propio, stock bajo, agotado, hecho por pedido y oferta. La dueña los edita o elimina cuando cargue los reales.
 - `SETUP_TOKEN` configurado en el worker `artelicat` por la dueña; la cuenta del panel ya existe.
 
