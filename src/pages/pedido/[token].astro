@@ -3,10 +3,11 @@
 import StoreLayout from '../../layouts/StoreLayout.astro';
 import Badge from '../../components/store/Badge.astro';
 import Icon from '../../components/store/Icon.astro';
+import OrderTimeline from '../../components/store/OrderTimeline.astro';
 import { getDb } from '../../lib/db';
 import { formatCOP } from '../../modules/catalogo/format';
-import { formatPhone, newOrderMessage, orderCode, paymentMethodLabel, shippingLabel } from '../../modules/pedidos/format';
-import { getOrderByToken, listOrderItems, RECEIPT_TYPES, saveReceipt } from '../../modules/pedidos/repo';
+import { formatPhone, newOrderMessage, orderCode, orderTimeline, paymentMethodLabel, shippingLabel } from '../../modules/pedidos/format';
+import { getOrderByToken, listOrderEvents, listOrderItems, RECEIPT_TYPES, saveReceipt } from '../../modules/pedidos/repo';
 import { checkoutConfig, whatsappUrl } from '../../modules/tiendas/settings';
 
 const db = getDb();
@@ -30,7 +31,8 @@ if (Astro.request.method === 'POST' && canUpload) {
   if (!error) return Astro.redirect(`${self}?comprobante=1`);
 }
 
-const items = await listOrderItems(db, order.id);
+const [items, events] = await Promise.all([listOrderItems(db, order.id), listOrderEvents(db, order.id)]);
+const steps = orderTimeline(order, events);
 const config = checkoutConfig(store.settings);
 const url = new URL(self, Astro.url.origin).toString();
 const notify = whatsappUrl(store.settings, newOrderMessage(order, items, store.settings.whatsappMessage, config.transferLabel, url));
@@ -40,7 +42,13 @@ const needsPayment = canUpload && (order.paymentStatus === 'pending' || order.pa
 const heading =
   order.status === 'cancelled'
     ? 'Este pedido fue cancelado.'
-    : order.paymentStatus === 'paid'
+    : order.status === 'delivered'
+      ? '¡Pedido entregado!'
+      : order.status === 'shipped'
+        ? '¡Tu pedido va en camino!'
+        : order.status === 'preparing'
+          ? 'Estamos preparando tu pedido.'
+          : order.paymentStatus === 'paid'
       ? '¡Pago confirmado!'
       : order.paymentStatus === 'review'
         ? 'Estamos revisando tu pago.'
@@ -54,7 +62,13 @@ const heading =
 const lead =
   order.status === 'cancelled'
     ? 'Si crees que es un error, escríbenos por WhatsApp.'
-    : order.paymentStatus === 'paid'
+    : order.status === 'delivered'
+      ? 'Gracias por tu compra. Esperamos que lo disfrutes.'
+      : order.status === 'shipped'
+        ? 'Si tienes dudas sobre la entrega, escríbenos por WhatsApp.'
+        : order.status === 'preparing'
+          ? 'Te avisamos por WhatsApp cuando salga.'
+          : order.paymentStatus === 'paid'
       ? 'Ya estamos preparando tu pedido. Te avisamos por WhatsApp cuando salga.'
       : order.paymentStatus === 'review'
         ? 'Recibimos tu comprobante. Te confirmamos por WhatsApp apenas lo verifiquemos.'
@@ -76,6 +90,11 @@ const accept = Object.keys(RECEIPT_TYPES).join(',');
 
   <section class="band order">
     <div class="main">
+      <article class="box">
+        <h2 class="heading-sm">Seguimiento</h2>
+        <OrderTimeline steps={steps} />
+      </article>
+
       {
         needsPayment && (
           <article class="box pay">
@@ -119,9 +138,9 @@ const accept = Object.keys(RECEIPT_TYPES).join(',');
       {
         order.status !== 'cancelled' && (
           <div class="box notify">
-            <p>¿Quieres avisarnos ya? Mándanos tu pedido por WhatsApp.</p>
+            <p>{order.status === 'new' ? '¿Quieres avisarnos ya? Mándanos tu pedido por WhatsApp.' : '¿Tienes dudas sobre tu pedido? Escríbenos.'}</p>
             <a class="btn btn-ghost" href={notify} target="_blank" rel="noopener noreferrer">
-              <Icon name="whatsapp" /> Avisar por WhatsApp
+              <Icon name="whatsapp" /> {order.status === 'new' ? 'Avisar por WhatsApp' : 'Escribir por WhatsApp'}
             </a>
           </div>
         )

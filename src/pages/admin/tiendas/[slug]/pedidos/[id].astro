@@ -2,7 +2,7 @@
 import AdminLayout from '../../../../../layouts/AdminLayout.astro';
 import { getDb } from '../../../../../lib/db';
 import { getStoreBySlug } from '../../../../../modules/tiendas/repo';
-import { getOrder, listOrderItems, updateOrder } from '../../../../../modules/pedidos/repo';
+import { getOrder, listOrderEvents, listOrderItems, updateOrder } from '../../../../../modules/pedidos/repo';
 import { formatCOP } from '../../../../../modules/catalogo/format';
 import {
   ORDER_STATUS_LABELS,
@@ -11,6 +11,7 @@ import {
   formatPhone,
   orderActions,
   orderCode,
+  orderTimeline,
   paymentMethodLabel,
   shippingLabel,
 } from '../../../../../modules/pedidos/format';
@@ -30,6 +31,9 @@ const MESSAGES: Record<string, string> = {
   confirm_payment: 'Pago confirmado. El pedido quedó confirmado.',
   reject_receipt: 'Comprobante rechazado. La clienta puede subir otro desde el enlace de su pedido.',
   confirm_order: 'Pedido confirmado.',
+  prepare: 'Pedido en preparación.',
+  ship: 'Pedido marcado en camino.',
+  deliver: 'Pedido entregado.',
   cancel: 'Pedido cancelado.',
   reopen: 'Pedido reabierto.',
   note: 'Nota guardada.',
@@ -39,19 +43,20 @@ if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
   const action = String(form.get('action') ?? '');
   if (action === 'note') {
-    await updateOrder(db, store.id, order.id, { adminNote: String(form.get('adminNote') ?? '').trim().slice(0, 2000) });
+    await updateOrder(db, order, { adminNote: String(form.get('adminNote') ?? '').trim().slice(0, 2000) });
     return Astro.redirect(`${self}?ok=note`);
   }
   // Solo las acciones que permite el estado actual (evita, por ejemplo, confirmar un pedido cancelado).
   const chosen = actions.find((a) => a.action === action);
   if (chosen) {
-    await updateOrder(db, store.id, order.id, chosen.patch);
+    await updateOrder(db, order, chosen.patch);
     return Astro.redirect(`${self}?ok=${chosen.action}`);
   }
   return Astro.redirect(self);
 }
 
-const items = await listOrderItems(db, order.id);
+const [items, events] = await Promise.all([listOrderItems(db, order.id), listOrderEvents(db, order.id)]);
+const steps = orderTimeline(order, events);
 const config = checkoutConfig(store.settings);
 const ok = MESSAGES[Astro.url.searchParams.get('ok') ?? ''] ?? null;
 const firstName = order.customerName.split(' ')[0];
@@ -82,6 +87,22 @@ const publicUrl = `/pedido/${order.token}?tienda=${store.slug}`;
   {ok && <div class="alert ok" role="status">{ok}</div>}
 
   <section class="card">
+    <h2>Seguimiento</h2>
+    <ol class="timeline">
+      {
+        steps.map((step) => (
+          <li class:list={{ done: step.done, current: step.current, cancelled: step.status === 'cancelled' }}>
+            <span class="dot" aria-hidden="true">{step.status === 'cancelled' ? '×' : step.done ? '✓' : ''}</span>
+            <strong>{step.label}</strong>
+            <small class="muted">{step.at ? formatDateTime(step.at) : step.done ? '' : 'Pendiente'}</small>
+          </li>
+        ))
+      }
+    </ol>
+    {order.status === 'delivered' && <p class="muted">Pedido terminado.</p>}
+  </section>
+
+  <section class="card">
     <h2>Acciones</h2>
     <form method="post" class="row">
       {
@@ -90,7 +111,7 @@ const publicUrl = `/pedido/${order.token}?tienda=${store.slug}`;
             class:list={['button', { secondary: i > 0 || a.action === 'reopen', danger: a.action === 'cancel' }]}
             name="action"
             value={a.action}
-            data-confirm={a.action === 'cancel' ? '¿Cancelar este pedido?' : a.action === 'reject_receipt' ? '¿Rechazar el comprobante?' : undefined}
+            data-confirm={a.confirm}
           >
             {a.label}
           </button>
@@ -234,12 +255,18 @@ const publicUrl = `/pedido/${order.token}?tienda=${store.slug}`;
     color: var(--a-muted);
     font-size: 13px;
   }
-  .tag.new,
+  .tag.new {
+    background: var(--a-accent);
+    color: var(--a-accent-ink);
+  }
+  .tag.confirmed,
+  .tag.preparing,
+  .tag.shipped,
   .tag.pay-review {
     background: var(--a-info-bg);
     color: var(--a-info);
   }
-  .tag.confirmed,
+  .tag.delivered,
   .tag.pay-paid {
     background: var(--a-ok-bg);
     color: var(--a-ok);
@@ -247,6 +274,87 @@ const publicUrl = `/pedido/${order.token}?tienda=${store.slug}`;
   .tag.pay-rejected {
     background: var(--a-err-bg);
     color: var(--a-err);
+  }
+  .timeline {
+    display: grid;
+    gap: 14px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .timeline li {
+    position: relative;
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr);
+    column-gap: 10px;
+    align-items: center;
+  }
+  .timeline small {
+    grid-column: 2;
+  }
+  .timeline li:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    top: 28px;
+    left: 12px;
+    width: 2px;
+    height: calc(100% - 14px);
+    background: var(--a-line);
+  }
+  .timeline li.done:not(:last-child)::after {
+    background: var(--a-ok);
+  }
+  .timeline .dot {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border: 2px solid var(--a-line);
+    border-radius: 50%;
+    background: var(--a-panel);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .timeline .done .dot {
+    border-color: var(--a-ok);
+    background: var(--a-ok);
+  }
+  .timeline .current .dot {
+    border-color: var(--a-accent);
+    background: var(--a-accent);
+    box-shadow: 0 0 0 4px var(--a-info-bg);
+  }
+  .timeline .cancelled .dot {
+    border-color: var(--a-err);
+    background: var(--a-err);
+  }
+  .timeline li:not(.done) strong {
+    color: var(--a-muted);
+    font-weight: 500;
+  }
+  /* En pantallas anchas, la línea de tiempo va de lado a lado. */
+  @media (min-width: 720px) {
+    .timeline {
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(0, 1fr);
+      gap: 0;
+    }
+    .timeline li {
+      grid-template-columns: none;
+      justify-items: center;
+      row-gap: 6px;
+      text-align: center;
+    }
+    .timeline small {
+      grid-column: auto;
+    }
+    .timeline li:not(:last-child)::after {
+      top: 12px;
+      left: calc(50% + 17px);
+      width: calc(100% - 34px);
+      height: 2px;
+    }
   }
   .button.danger {
     border-color: var(--a-err);

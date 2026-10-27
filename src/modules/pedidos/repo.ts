@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm';
-import { orderItems, orders, type Order, type OrderStatus } from '../../db/schema';
+import { orderEvents, orderItems, orders, type Order, type OrderStatus } from '../../db/schema';
 import type { Db } from '../../lib/db';
 import { sniffType } from '../medios/repo';
 import type { CartLine } from './cart';
@@ -41,12 +41,17 @@ export async function createOrder(db: Db, storeId: number, data: CheckoutData, l
       image: l.product.images[0] ?? null,
     }),
   );
-  await db.batch([insertOrder, ...insertItems]);
+  const insertEvent = db.insert(orderEvents).values({ storeId, orderId, status: 'new' });
+  await db.batch([insertOrder, ...insertItems, insertEvent]);
   return token;
 }
 
 export function listOrderItems(db: Db, orderId: number) {
   return db.select().from(orderItems).where(eq(orderItems.orderId, orderId)).orderBy(asc(orderItems.id)).all();
+}
+
+export function listOrderEvents(db: Db, orderId: number) {
+  return db.select().from(orderEvents).where(eq(orderEvents.orderId, orderId)).orderBy(asc(orderEvents.createdAt), asc(orderEvents.id)).all();
 }
 
 export async function getOrderByToken(db: Db, storeId: number, token: string) {
@@ -103,16 +108,21 @@ export async function newOrderCounts(db: Db) {
   return new Map(rows.map((r) => [r.storeId, r.n]));
 }
 
+/** Cambia el pedido y, si cambió de estado, lo anota en el historial (en la misma operación). */
 export async function updateOrder(
   db: Db,
-  storeId: number,
-  id: number,
+  order: Pick<Order, 'id' | 'storeId' | 'status'>,
   patch: Partial<Pick<Order, 'status' | 'paymentStatus' | 'adminNote'>>,
 ) {
-  await db
+  const update = db
     .update(orders)
     .set({ ...patch, updatedAt: new Date() })
-    .where(and(eq(orders.id, id), eq(orders.storeId, storeId)));
+    .where(and(eq(orders.id, order.id), eq(orders.storeId, order.storeId)));
+  if (!patch.status || patch.status === order.status) {
+    await update;
+    return;
+  }
+  await db.batch([update, db.insert(orderEvents).values({ storeId: order.storeId, orderId: order.id, status: patch.status })]);
 }
 
 // ---------------------------------------------------------------------------

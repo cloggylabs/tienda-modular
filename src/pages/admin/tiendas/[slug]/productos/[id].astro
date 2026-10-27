@@ -1,9 +1,10 @@
 ---
 import AdminLayout from '../../../../../layouts/AdminLayout.astro';
 import Errors from '../../../../../components/admin/Errors.astro';
+import CopyLink from '../../../../../components/admin/CopyLink.astro';
 import MediaMultiPicker from '../../../../../components/admin/MediaMultiPicker.astro';
 import { getDb } from '../../../../../lib/db';
-import { getStoreBySlug } from '../../../../../modules/tiendas/repo';
+import { getStoreBySlug, storeLinker } from '../../../../../modules/tiendas/repo';
 import { listMedia } from '../../../../../modules/medios/repo';
 import {
   deleteProduct,
@@ -74,6 +75,8 @@ const ok = Astro.url.searchParams.has('guardado')
   : null;
 const money = (n?: number | null) => (n ? n.toLocaleString('es-CO') : '');
 const variantRows = Array.from({ length: MAX_VARIANTS }, (_, i) => values.variants?.[i]);
+// Enlace público con la dirección guardada (no la que se está editando).
+const publicUrl = existing ? (await storeLinker(db, store, Astro.url))(`/producto/${existing.slug}`) : null;
 const title = isNew ? 'Nuevo producto' : (existing?.name ?? 'Producto');
 ---
 
@@ -96,8 +99,9 @@ const title = isNew ? 'Nuevo producto' : (existing?.name ?? 'Producto');
         <div class="slug">
           <span class="muted">/producto/</span>
           <input type="text" name="slug" value={values.slug ?? ''} maxlength="60" pattern="[a-z0-9-]+" data-slug data-touched={isNew ? undefined : ''} />
+          {publicUrl && <CopyLink url={publicUrl} label="Copiar enlace del producto" />}
         </div>
-        <small>Se arma sola a partir del nombre. Si la cambias después, los enlaces compartidos dejarán de funcionar.</small>
+        <small>Se arma sola a partir del nombre. Si la cambias después, los enlaces compartidos dejarán de funcionar. El botón copia el enlace completo para compartirlo (solo funciona si el producto está publicado).</small>
       </label>
       <label class="field">
         <span>Descripción</span>

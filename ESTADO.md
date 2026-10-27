@@ -9,6 +9,11 @@
 - **Fase 3:** catálogo con productos, variantes, categorías, colecciones por temporada y bloque «Productos» para el inicio.
 - **Fase 4:** carrito, checkout, pedidos y comprobantes de pago (ver README → «Carrito y pedidos»). Publicada el 27 de octubre de 2026.
 
+## Hecho, sin publicar todavía
+
+- Línea de tiempo de pedidos (Recibido, Confirmado, En preparación, En camino, Entregado, Cancelado) con historial de fechas; migración `0004_historial_pedidos` (aplicada solo en local; agrega al historial los pedidos que ya existen).
+- Botón para copiar el enlace público de productos y colecciones en el panel.
+
 En producción (Cloudflare, plan gratuito):
 
 - Artelicat: https://artelicat.tienda-modular.workers.dev
@@ -41,7 +46,7 @@ En producción (Cloudflare, plan gratuito):
 - Envío por **destinos** configurables (nombre, costo o «por confirmar», si admite contra entrega) + envío gratis opcional.
 - Pago con comprobante: Bre-B/transferencia → la clienta sube foto o PDF; la dueña confirma o rechaza en el panel.
 - Aviso a la dueña: contador de «por atender» en el panel + botón «Avisar por WhatsApp» que manda la clienta. Correo automático no, porque Cloudflare Email necesita dominio propio.
-- Estados: pedido *Por atender / Confirmado / Cancelado*; pago *Sin pagar / Por revisar / Pagado / Rechazado*.
+- Estados: pedido *Recibido / Confirmado / En preparación / En camino / Entregado / Cancelado*; pago *Sin pagar / Por revisar / Pagado / Rechazado*.
 - Antispam básico: campo trampa en el checkout. Si llega spam, siguiente paso: Turnstile.
 
 ## Pendiente de la dueña (Fase 4)
@@ -50,7 +55,7 @@ En producción (Cloudflare, plan gratuito):
 
 ## Siguiente: Fase 5 — envíos y stock
 
-- Estados de envío (preparando, enviado con guía, entregado) y avisos a la clienta.
+- Transportadora y número de guía al marcar «En camino», y avisos a la clienta en cada cambio de estado.
 - Descontar stock al confirmar (y devolverlo al cancelar).
 - Después: personalización de productos y pasarela en línea (Wompi).
 

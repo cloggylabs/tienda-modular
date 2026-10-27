@@ -173,7 +173,7 @@ export const productCollections = sqliteTable(
   (t) => [primaryKey({ columns: [t.productId, t.collectionId] }), index('product_collections_collection_idx').on(t.collectionId)],
 );
 
-export type OrderStatus = 'new' | 'confirmed' | 'cancelled';
+export type OrderStatus = 'new' | 'confirmed' | 'preparing' | 'shipped' | 'delivered' | 'cancelled';
 export type PaymentMethod = 'transfer' | 'cod';
 /** pending: falta pagar · review: subió comprobante · paid: pago confirmado · rejected: comprobante rechazado. */
 export type PaymentStatus = 'pending' | 'review' | 'paid' | 'rejected';
@@ -240,6 +240,23 @@ export const orderItems = sqliteTable(
   (t) => [index('order_items_order_idx').on(t.orderId)],
 );
 
+/** Historial de estados de cada pedido: de aquí sale la línea de tiempo (cuándo se confirmó, envió…). */
+export const orderEvents = sqliteTable(
+  'order_events',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    storeId: integer('store_id')
+      .notNull()
+      .references(() => stores.id, { onDelete: 'cascade' }),
+    orderId: integer('order_id')
+      .notNull()
+      .references(() => orders.id, { onDelete: 'cascade' }),
+    status: text('status').$type<OrderStatus>().notNull(),
+    createdAt: timestamps.createdAt,
+  },
+  (t) => [index('order_events_order_idx').on(t.orderId, t.createdAt)],
+);
+
 /** Personas que entran al panel. Pueden administrar todas las tiendas. */
 export const adminUsers = sqliteTable(
   'admin_users',
@@ -278,5 +295,6 @@ export type Product = typeof products.$inferSelect;
 export type Collection = typeof collections.$inferSelect;
 export type Order = typeof orders.$inferSelect;
 export type OrderItem = typeof orderItems.$inferSelect;
+export type OrderEvent = typeof orderEvents.$inferSelect;
 export type AdminUser = typeof adminUsers.$inferSelect;
 

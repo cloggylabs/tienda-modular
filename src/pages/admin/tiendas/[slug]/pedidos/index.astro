@@ -154,12 +154,18 @@ const href = (value?: OrderStatus) => {
     color: var(--a-muted);
     font-size: 12px;
   }
-  .tag.new,
+  .tag.new {
+    background: var(--a-accent);
+    color: var(--a-accent-ink);
+  }
+  .tag.confirmed,
+  .tag.preparing,
+  .tag.shipped,
   .tag.pay-review {
     background: var(--a-info-bg);
     color: var(--a-info);
   }
-  .tag.confirmed,
+  .tag.delivered,
   .tag.pay-paid {
     background: var(--a-ok-bg);
     color: var(--a-ok);

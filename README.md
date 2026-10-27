@@ -80,8 +80,10 @@ El panel arma el formulario solo a partir de esa lista de campos.
 - **Finalizar compra** (`/finalizar`): nombre, celular colombiano, correo opcional, departamento, ciudad, dirección y notas; la clienta elige el **destino de envío** y el **pago**.
 - **Envíos** (*Ajustes generales → Envíos*): hasta 8 destinos con su costo (vacío = «por confirmar» por WhatsApp) y si admiten **contra entrega**. Opcional: envío gratis desde cierto subtotal. Sin destinos guardados se ofrece «Envío a todo Colombia» por confirmar y sin contra entrega.
 - **Bre-B / transferencia:** al confirmar, la página del pedido muestra el valor y los *Datos para Bre-B o transferencia* de los ajustes, y la clienta sube el comprobante (foto o PDF, máx. 5 MB). Los comprobantes van a R2 bajo `comprobantes/` y solo se ven desde el panel.
-- **Página del pedido** (`/pedido/<clave>`): enlace secreto y no indexado; muestra el estado y un botón para avisar por WhatsApp con el resumen.
-- **Panel → Pedidos:** lista con filtros y búsqueda, contador de pedidos por atender, detalle con comprobante, confirmar o rechazar el pago, confirmar pedidos contra entrega, cancelar o reabrir y nota interna.
+- **Estados del pedido:** Recibido → Confirmado → En preparación → En camino → Entregado, o Cancelado en cualquier punto antes de entregarse. Cada cambio queda en el historial (`order_events`) con su fecha, y de ahí sale la línea de tiempo. Al entregar un pedido contra entrega, el pago queda como recibido.
+- **Página del pedido** (`/pedido/<clave>`): enlace secreto y no indexado; muestra la línea de tiempo y un botón de WhatsApp con el resumen.
+- **Panel → Pedidos:** lista con filtros por estado y búsqueda, contador de pedidos por atender (Recibido), detalle con línea de tiempo y comprobante; confirmar o rechazar el pago, avanzar de estado, cancelar o reabrir y nota interna.
+- En el formulario de productos y colecciones, el ícono de enlace junto a la dirección copia la URL pública completa de la tienda que corresponde.
 - Los pedidos copian nombre, opción, precio y foto de cada producto: no cambian si después se edita el catálogo. El stock todavía no se descuenta (Fase 5).
 
 ## Fotos

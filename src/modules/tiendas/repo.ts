@@ -1,5 +1,5 @@
 import { asc, eq, inArray, and, ne } from 'drizzle-orm';
-import { storeDomains, stores } from '../../db/schema';
+import { storeDomains, stores, type Store } from '../../db/schema';
 import type { Db } from '../../lib/db';
 import type { Theme } from '../tema/theme';
 import type { StoreSettings } from './settings';
@@ -19,6 +19,19 @@ export function getDomains(db: Db, storeId: number) {
     .where(eq(storeDomains.storeId, storeId))
     .orderBy(asc(storeDomains.hostname))
     .all();
+}
+
+/**
+ * Arma enlaces públicos de una tienda desde el panel (que puede estar abierto en el dominio de otra).
+ * 1. Dominio principal registrado. 2. Sin dominio: su subdominio *.workers.dev, porque cada worker se
+ * llama igual que el slug de su tienda (wrangler.jsonc). 3. En local: vista previa con ?tienda=.
+ */
+export async function storeLinker(db: Db, store: Pick<Store, 'id' | 'slug'>, current: URL): Promise<(path: string) => string> {
+  const primary = (await getDomains(db, store.id)).find((d) => d.isPrimary);
+  if (primary) return (path) => `https://${primary.hostname}${path}`;
+  const workers = /^[^.]+\.([^.]+\.workers\.dev)$/.exec(current.hostname);
+  if (workers) return (path) => `https://${store.slug}.${workers[1]}${path}`;
+  return (path) => `${current.origin}${path}?tienda=${store.slug}`;
 }
 
 export interface GeneralInput {

@@ -1,0 +1,94 @@
+---
+// Botón con ícono de enlace que copia una dirección pública al portapapeles.
+interface Props {
+  url: string;
+  label?: string;
+}
+const { url, label = 'Copiar enlace' } = Astro.props;
+---
+
+<span class="copy-link">
+  <button type="button" class="copy" data-copy={url} title={`${label}: ${url}`} aria-label={label}>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5" />
+      <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5" />
+    </svg>
+  </button>
+  <span class="copied" role="status" data-copied></span>
+</span>
+
+<script>
+  async function copy(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Navegadores sin portapapeles moderno: copia con un campo temporal.
+      const temp = document.createElement('textarea');
+      temp.value = text;
+      temp.style.position = 'fixed';
+      temp.style.opacity = '0';
+      document.body.appendChild(temp);
+      temp.select();
+      const ok = document.execCommand('copy');
+      temp.remove();
+      return ok;
+    }
+  }
+
+  document.querySelectorAll<HTMLButtonElement>('[data-copy]').forEach((button) =>
+    button.addEventListener('click', async () => {
+      const status = button.parentElement?.querySelector<HTMLElement>('[data-copied]');
+      const ok = await copy(button.dataset.copy!);
+      if (!status) return;
+      status.textContent = ok ? '¡Enlace copiado!' : 'No se pudo copiar';
+      button.classList.toggle('ok', ok);
+      setTimeout(() => {
+        status.textContent = '';
+        button.classList.remove('ok');
+      }, 2000);
+    }),
+  );
+</script>
+
+<style>
+  .copy-link {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+  }
+  .copy {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border: 1px solid var(--a-line);
+    border-radius: 8px;
+    background: var(--a-panel);
+    color: var(--a-ink);
+    cursor: pointer;
+  }
+  .copy:hover {
+    border-color: var(--a-ink);
+  }
+  .copy.ok {
+    border-color: var(--a-ok);
+    color: var(--a-ok);
+  }
+  .copied {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 6px);
+    white-space: nowrap;
+    padding: 0 8px;
+    border-radius: 6px;
+    background: var(--a-ink);
+    color: #fff;
+    font-size: 12px;
+    line-height: 24px;
+  }
+  .copied:empty {
+    display: none;
+  }
+</style>

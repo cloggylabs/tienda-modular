@@ -1,0 +1,94 @@
+---
+// Seguimiento del pedido para la clienta: pasos hechos con su fecha, el actual resaltado y lo que falta en gris.
+import { ORDER_STEP_HINTS, formatDateTime, type TimelineStep } from '../../modules/pedidos/format';
+
+interface Props {
+  steps: TimelineStep[];
+}
+const { steps } = Astro.props;
+---
+
+<ol class="timeline">
+  {
+    steps.map((step) => (
+      <li class:list={{ done: step.done, current: step.current, cancelled: step.status === 'cancelled' }} aria-current={step.current ? 'step' : undefined}>
+        <span class="dot" aria-hidden="true">
+          {step.status === 'cancelled' ? '×' : step.done ? '✓' : ''}
+        </span>
+        <div class="text">
+          <strong>{step.label}</strong>
+          {step.at && <time datetime={step.at.toISOString()}>{formatDateTime(step.at)}</time>}
+          {step.current && <p>{ORDER_STEP_HINTS[step.status]}</p>}
+          {!step.done && <span class="visually-hidden">Pendiente</span>}
+        </div>
+      </li>
+    ))
+  }
+</ol>
+
+<style>
+  .timeline {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  li {
+    position: relative;
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: var(--spacing-16);
+    padding-bottom: var(--spacing-20);
+  }
+  /* Línea que une los pasos */
+  li:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    top: 28px;
+    bottom: 0;
+    left: 13px;
+    width: 2px;
+    background: var(--color-ink);
+    opacity: 0.2;
+  }
+  li.done:not(:last-child)::before {
+    opacity: 1;
+  }
+  .dot {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border: 2px solid var(--color-ink);
+    border-radius: 50%;
+    background: var(--color-canvas);
+    font-size: 14px;
+    font-weight: var(--font-weight-bold);
+    line-height: 1;
+  }
+  .done .dot {
+    background: var(--color-ink);
+    color: var(--color-canvas);
+  }
+  .current .dot {
+    background: var(--color-cta);
+    color: var(--color-ink);
+    box-shadow: 0 0 0 4px var(--color-surface);
+  }
+  li:not(.done) {
+    opacity: 0.45;
+  }
+  .text {
+    display: grid;
+    gap: 2px;
+    padding-top: 2px;
+  }
+  time {
+    font-size: var(--text-caption);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .text p {
+    margin-top: var(--spacing-4);
+  }
+</style>

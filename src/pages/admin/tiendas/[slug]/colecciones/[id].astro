@@ -1,8 +1,9 @@
 ---
 import AdminLayout from '../../../../../layouts/AdminLayout.astro';
 import Errors from '../../../../../components/admin/Errors.astro';
+import CopyLink from '../../../../../components/admin/CopyLink.astro';
 import { getDb } from '../../../../../lib/db';
-import { getStoreBySlug } from '../../../../../modules/tiendas/repo';
+import { getStoreBySlug, storeLinker } from '../../../../../modules/tiendas/repo';
 import { listMedia, mediaUrl } from '../../../../../modules/medios/repo';
 import { deleteCollection, getCollection, saveCollection, slugTaken, type CollectionInput } from '../../../../../modules/catalogo/repo';
 import { collectionStatus } from '../../../../../modules/catalogo/format';
@@ -49,6 +50,8 @@ if (Astro.request.method === 'POST') {
 
 const media = await listMedia(db, store.id);
 const ok = Astro.url.searchParams.has('guardada') ? `Colección guardada (${collectionStatus(values).toLowerCase()}).` : null;
+// Enlace público con la dirección guardada (no la que se está editando).
+const publicUrl = existing ? (await storeLinker(db, store, Astro.url))(`/coleccion/${existing.slug}`) : null;
 const title = isNew ? 'Nueva colección' : (existing?.name ?? 'Colección');
 ---
 
@@ -70,6 +73,7 @@ const title = isNew ? 'Nueva colección' : (existing?.name ?? 'Colección');
       <div class="slug">
         <span class="muted">/coleccion/</span>
         <input type="text" name="slug" value={values.slug} maxlength="60" pattern="[a-z0-9-]+" data-slug data-touched={isNew ? undefined : ''} />
+        {publicUrl && <CopyLink url={publicUrl} label="Copiar enlace de la colección" />}
       </div>
     </label>
     <label class="field">

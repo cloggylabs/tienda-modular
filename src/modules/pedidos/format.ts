@@ -1,13 +1,66 @@
 // Reglas y textos de los pedidos, compartidos por la tienda y el panel.
-import type { Order, OrderItem, OrderStatus, PaymentStatus } from '../../db/schema';
+import type { Order, OrderEvent, OrderItem, OrderStatus, PaymentStatus } from '../../db/schema';
 import { formatCOP } from '../catalogo/format';
 import type { CheckoutConfig, ShippingZone } from '../tiendas/settings';
 
 export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
-  new: 'Por atender',
+  new: 'Recibido',
   confirmed: 'Confirmado',
+  preparing: 'En preparación',
+  shipped: 'En camino',
+  delivered: 'Entregado',
   cancelled: 'Cancelado',
 };
+
+/** Camino normal de un pedido. Cancelado puede pasar en cualquier punto antes de entregarse. */
+export const ORDER_FLOW = ['new', 'confirmed', 'preparing', 'shipped', 'delivered'] as const satisfies OrderStatus[];
+
+/** Qué significa cada paso, contado a la clienta. */
+export const ORDER_STEP_HINTS: Record<OrderStatus, string> = {
+  new: 'Recibimos tu pedido.',
+  confirmed: 'Confirmamos tu pedido y el pago.',
+  preparing: 'Lo estamos haciendo y empacando.',
+  shipped: 'Salió hacia tu dirección.',
+  delivered: '¡Llegó! Gracias por tu compra.',
+  cancelled: 'El pedido se canceló.',
+};
+
+export interface TimelineStep {
+  status: OrderStatus;
+  label: string;
+  done: boolean;
+  /** Es el estado actual del pedido. */
+  current: boolean;
+  at?: Date;
+}
+
+/**
+ * Línea de tiempo del pedido a partir de su historial. Si se canceló, muestra los pasos que alcanzó
+ * y termina en «Cancelado»; si no, todo el camino con lo que falta en gris.
+ */
+export function orderTimeline(order: Pick<Order, 'status' | 'createdAt'>, events: Pick<OrderEvent, 'status' | 'createdAt'>[]): TimelineStep[] {
+  const cancelled = order.status === 'cancelled';
+  const cancelIndex = cancelled ? events.findLastIndex((e) => e.status === 'cancelled') : -1;
+  // Hasta dónde llegó: el estado actual o, si se canceló, el que tenía justo antes.
+  const reached = cancelled
+    ? (events.slice(0, cancelIndex === -1 ? events.length : cancelIndex).findLast((e) => e.status !== 'cancelled')?.status ?? 'new')
+    : order.status;
+  const position = ORDER_FLOW.indexOf(reached as (typeof ORDER_FLOW)[number]);
+  const lastAt = (status: OrderStatus) => events.findLast((e) => e.status === status)?.createdAt;
+
+  const steps: TimelineStep[] = ORDER_FLOW.map((status, i) => ({
+    status,
+    label: ORDER_STATUS_LABELS[status],
+    done: i <= position,
+    current: !cancelled && i === position,
+    at: i <= position ? (lastAt(status) ?? (status === 'new' ? order.createdAt : undefined)) : undefined,
+  }));
+  if (!cancelled) return steps;
+  return [
+    ...steps.filter((s) => s.done),
+    { status: 'cancelled', label: ORDER_STATUS_LABELS.cancelled, done: true, current: true, at: lastAt('cancelled') },
+  ];
+}
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   pending: 'Sin pagar',
@@ -16,26 +69,40 @@ export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   rejected: 'Comprobante rechazado',
 };
 
-export type OrderAction = 'confirm_payment' | 'reject_receipt' | 'confirm_order' | 'cancel' | 'reopen';
+export type OrderAction = 'confirm_payment' | 'reject_receipt' | 'confirm_order' | 'prepare' | 'ship' | 'deliver' | 'cancel' | 'reopen';
+type Patch = Partial<Pick<Order, 'status' | 'paymentStatus'>>;
 
 /** Qué puede hacer la dueña con un pedido según su estado, y cómo queda después. */
 export function orderActions(order: Pick<Order, 'status' | 'paymentMethod' | 'paymentStatus'>) {
-  const actions: { action: OrderAction; label: string; patch: Partial<Pick<Order, 'status' | 'paymentStatus'>> }[] = [];
-  if (order.status === 'cancelled') {
-    actions.push({ action: 'reopen', label: 'Reabrir pedido', patch: { status: 'new' } });
-    return actions;
+  const actions: { action: OrderAction; label: string; patch: Patch; confirm?: string }[] = [];
+  const add = (action: OrderAction, label: string, patch: Patch, confirm?: string) => actions.push({ action, label, patch, confirm });
+
+  switch (order.status) {
+    case 'cancelled':
+      add('reopen', 'Reabrir pedido', { status: 'new' });
+      return actions;
+    case 'new':
+      if (order.paymentMethod === 'transfer' && order.paymentStatus !== 'paid') {
+        add('confirm_payment', order.paymentStatus === 'review' ? 'Confirmar pago' : 'Marcar como pagado', { paymentStatus: 'paid', status: 'confirmed' });
+        if (order.paymentStatus === 'review') add('reject_receipt', 'Rechazar comprobante', { paymentStatus: 'rejected' }, '¿Rechazar el comprobante?');
+      } else {
+        add('confirm_order', 'Confirmar pedido', { status: 'confirmed' });
+      }
+      break;
+    case 'confirmed':
+      add('prepare', 'Pasar a preparación', { status: 'preparing' });
+      break;
+    case 'preparing':
+      add('ship', 'Marcar en camino', { status: 'shipped' });
+      break;
+    case 'shipped':
+      // Contra entrega: al entregarlo, la clienta ya pagó en efectivo.
+      add('deliver', 'Marcar como entregado', { status: 'delivered', ...(order.paymentMethod === 'cod' ? { paymentStatus: 'paid' as const } : {}) }, '¿Confirmas que el pedido ya fue entregado?');
+      break;
+    case 'delivered':
+      return actions;
   }
-  if (order.paymentMethod === 'transfer' && order.paymentStatus !== 'paid') {
-    const label = order.paymentStatus === 'review' ? 'Confirmar pago' : 'Marcar como pagado';
-    actions.push({ action: 'confirm_payment', label, patch: { paymentStatus: 'paid', status: 'confirmed' } });
-    if (order.paymentStatus === 'review') {
-      actions.push({ action: 'reject_receipt', label: 'Rechazar comprobante', patch: { paymentStatus: 'rejected' } });
-    }
-  }
-  if (order.paymentMethod === 'cod' && order.status === 'new') {
-    actions.push({ action: 'confirm_order', label: 'Confirmar pedido', patch: { status: 'confirmed' } });
-  }
-  actions.push({ action: 'cancel', label: 'Cancelar pedido', patch: { status: 'cancelled' } });
+  add('cancel', 'Cancelar pedido', { status: 'cancelled' }, '¿Cancelar este pedido?');
   return actions;
 }
 
