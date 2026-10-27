@@ -2,6 +2,8 @@
 
 Ecommerce multi-tienda (Artelicat y Pochi Craft 3D) en Astro 7 + Cloudflare Workers + D1 + Drizzle. Todo el contenido visible va en español de Colombia; es un emprendimiento de una persona natural.
 
+**Al retomar, lee primero `ESTADO.md`:** qué está hecho y publicado, decisiones tomadas, pendientes y siguiente fase.
+
 ## Reglas del proyecto
 - Toda tabla de negocio lleva `store_id`. Una tienda nueva es una fila, nunca una copia de código.
 - Los componentes de la tienda solo usan variables del tema (`--color-ink`, `--color-band`, `--font-display`…). Nada de colores fijos.
