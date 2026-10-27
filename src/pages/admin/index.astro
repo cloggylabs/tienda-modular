@@ -2,17 +2,18 @@
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { getDb } from '../../lib/db';
 import { getDomains, listStores } from '../../modules/tiendas/repo';
+import { newOrderCounts } from '../../modules/pedidos/repo';
 
 const db = getDb();
 const stores = await listStores(db);
-const domains = await Promise.all(stores.map((s) => getDomains(db, s.id)));
+const [domains, pending] = await Promise.all([Promise.all(stores.map((s) => getDomains(db, s.id))), newOrderCounts(db)]);
 const user = Astro.locals.user!;
 ---
 
 <AdminLayout title="Inicio">
   <div class="stack">
     <h1>Hola, {user.name.split(' ')[0]}</h1>
-    <p class="muted">Elige una tienda para editar sus datos, su tema o ver cómo se ve.</p>
+    <p class="muted">Elige una tienda para ver sus pedidos, editar sus datos o ver cómo se ve.</p>
   </div>
   <div class="grid-2">
     {
@@ -26,6 +27,11 @@ const user = Astro.locals.user!;
           <div class="stack">
             <h2>{s.name}</h2>
             <p class="muted">{s.tagline}</p>
+            {pending.get(s.id) ? (
+              <a class="alert ok" href={`/admin/tiendas/${s.slug}/pedidos`}>
+                {pending.get(s.id) === 1 ? '1 pedido por atender' : `${pending.get(s.id)} pedidos por atender`} →
+              </a>
+            ) : null}
             <p class="muted">
               {domains[i]!.length
                 ? `Dominio: ${domains[i]![0]!.hostname}`
@@ -33,6 +39,9 @@ const user = Astro.locals.user!;
             </p>
           </div>
           <div class="row">
+            <a class="button secondary" href={`/admin/tiendas/${s.slug}/pedidos`}>
+              Pedidos
+            </a>
             <a class="button secondary" href={`/admin/tiendas/${s.slug}`}>
               Ajustes
             </a>

@@ -22,6 +22,9 @@ Ecommerce multi-tienda (Artelicat y Pochi Craft 3D) en Astro 7 + Cloudflare Work
 
 - Precios: enteros en COP; mostrar siempre con `formatCOP` y leer del formulario con `parsePrice`.
 - Lo que ve la tienda pasa por las consultas «activas» de `catalogo/repo.ts` (solo publicado y colecciones vigentes); el panel usa las versiones `*Admin`/`list*`.
+- Envíos y datos de pago son campos opcionales de `StoreSettings` (las tiendas viejas no los tienen): léelos siempre con `checkoutConfig()`.
+- El carrito no guarda precios: todo pasa por `resolveCart()`. Los pedidos se crean en un solo `db.batch` (número consecutivo por tienda y líneas enlazadas por el token).
+- Los comprobantes son privados: R2 bajo `comprobantes/`, servidos solo por la ruta del panel. `/media` únicamente sirve `tiendas/…`.
 - Pruebas con Playwright en `astro dev`: la barra de desarrollo de Astro tiene su propio DOM y Playwright busca dentro; usa selectores específicos (`li.item`, ids).
 
 ## Comandos

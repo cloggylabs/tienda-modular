@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-Última actualización: 26 de octubre de 2026.
+Última actualización: 27 de octubre de 2026.
 
 ## Hecho y publicado
 
@@ -16,6 +16,10 @@ En producción (Cloudflare, plan gratuito):
 - Base D1 `tienda-modular` (región ENAM), bucket R2 `tienda-modular-media`.
 - Migraciones aplicadas en producción: 0000_inicial, 0001_fotos, 0002_catalogo.
 - `SETUP_TOKEN` configurado en el worker `artelicat` por la dueña; la cuenta del panel ya existe.
+
+## Hecho, sin publicar todavía
+
+- **Fase 4:** carrito, checkout, pedidos y comprobantes (ver README → «Carrito y pedidos»). Migración nueva `0003_pedidos` (aplicada solo en local). Se publica con `npm run deploy`.
 
 ## Decisiones tomadas
 
@@ -33,17 +37,24 @@ En producción (Cloudflare, plan gratuito):
 - La promo de Halloween de Artelicat vence el 31 de octubre; la de Navidad de Pochi aparece el 15 de noviembre (contenido inventado como ejemplo).
 - Cargar categorías, fotos y productos reales.
 
-## Siguiente: Fase 4 — carrito y checkout
+## Decisiones de la Fase 4
 
-Idea acordada a grandes rasgos (falta detallar):
+- Carrito en cookie por tienda (sin cuentas de clientas). Precios y stock siempre desde la base.
+- Envío por **destinos** configurables (nombre, costo o «por confirmar», si admite contra entrega) + envío gratis opcional.
+- Pago con comprobante: Bre-B/transferencia → la clienta sube foto o PDF; la dueña confirma o rechaza en el panel.
+- Aviso a la dueña: contador de «por atender» en el panel + botón «Avisar por WhatsApp» que manda la clienta. Correo automático no, porque Cloudflare Email necesita dominio propio.
+- Estados: pedido *Por atender / Confirmado / Cancelado*; pago *Sin pagar / Por revisar / Pagado / Rechazado*.
+- Antispam básico: campo trampa en el checkout. Si llega spam, siguiente paso: Turnstile.
 
-- Carrito con varios productos y variantes.
-- Checkout con datos de envío del cliente.
-- Pago por Bre-B/transferencia: el cliente sube el comprobante y la dueña lo confirma en el panel.
-- Contra entrega solo en ciudades habilitadas.
-- Pedidos visibles en el panel; aviso a la dueña (WhatsApp o correo).
+## Pendiente de la dueña (Fase 4)
 
-Después: Fase 5 (estados de pedido, envíos, descuento de stock) y luego personalización de productos y pasarela en línea.
+- Después de publicar: en *Ajustes generales* de cada tienda, llenar **Datos para Bre-B o transferencia** y los **destinos de envío** (sin destinos, todo sale «Envío a todo Colombia», costo por confirmar y sin contra entrega).
+
+## Siguiente: Fase 5 — envíos y stock
+
+- Estados de envío (preparando, enviado con guía, entregado) y avisos a la clienta.
+- Descontar stock al confirmar (y devolverlo al cancelar).
+- Después: personalización de productos y pasarela en línea (Wompi).
 
 ## Notas para retomar
 

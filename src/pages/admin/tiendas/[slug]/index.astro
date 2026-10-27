@@ -3,7 +3,16 @@ import AdminLayout from '../../../../layouts/AdminLayout.astro';
 import Errors from '../../../../components/admin/Errors.astro';
 import { getDb } from '../../../../lib/db';
 import { getDomains, getStoreBySlug, parseDomains, setDomains, updateGeneral } from '../../../../modules/tiendas/repo';
-import { PAYMENT_OPTIONS, validateSettings, type NavLink } from '../../../../modules/tiendas/settings';
+import {
+  MAX_SHIPPING_ZONES,
+  PAYMENT_OPTIONS,
+  checkoutConfig,
+  validateSettings,
+  type NavLink,
+  type ShippingZone,
+} from '../../../../modules/tiendas/settings';
+import { parsePrice } from '../../../../modules/catalogo/validate';
+import { formatCOP } from '../../../../modules/catalogo/format';
 
 const db = getDb();
 const store = await getStoreBySlug(db, Astro.params.slug!);
@@ -11,6 +20,13 @@ if (!store) return new Response(null, { status: 404 });
 
 const NAV_ROWS = 5;
 let errors: string[] = [];
+// Filas del formulario de envíos: el costo se muestra como texto para poder corregirlo tal cual se escribió.
+type ZoneRow = { name: string; price: string; cod: boolean };
+const zoneRows = (zones: ShippingZone[] = []): ZoneRow[] =>
+  zones.map((z) => ({ name: z.name, price: z.price === null ? '' : formatCOP(z.price), cod: z.cod }));
+const saved = store.settings.shippingZones?.length ? checkoutConfig(store.settings) : null;
+let zoneValues = zoneRows(saved?.zones);
+let freeShippingText = saved?.freeShippingFrom ? formatCOP(saved.freeShippingFrom) : '';
 let values = {
   name: store.name,
   tagline: store.tagline,
@@ -29,6 +45,12 @@ if (Astro.request.method === 'POST') {
     label: text(`nav.${i}.label`),
     href: text(`nav.${i}.href`),
   }));
+  zoneValues = Array.from({ length: MAX_SHIPPING_ZONES }, (_, i) => ({
+    name: text(`zone.${i}.name`),
+    price: text(`zone.${i}.price`),
+    cod: form.get(`zone.${i}.cod`) === 'on',
+  })).filter((z) => z.name || z.price);
+  freeShippingText = text('freeShippingFrom');
   const settingsResult = validateSettings({
     whatsapp: text('whatsapp'),
     whatsappMessage: text('whatsappMessage'),
@@ -37,6 +59,9 @@ if (Astro.request.method === 'POST') {
     nav,
     legalNotice: text('legalNotice'),
     footerNote: text('footerNote'),
+    transferInstructions: text('transferInstructions'),
+    shippingZones: zoneValues.map((z) => ({ name: z.name, price: parsePrice(z.price), cod: z.cod })),
+    freeShippingFrom: parsePrice(freeShippingText),
   });
   const domainResult = parseDomains(text('domains'));
 
@@ -55,6 +80,7 @@ if (Astro.request.method === 'POST') {
           nav: nav.filter((l) => l.label || l.href),
           legalNotice: text('legalNotice'),
           footerNote: text('footerNote'),
+          transferInstructions: text('transferInstructions'),
         },
     domains: text('domains'),
   };
@@ -79,6 +105,7 @@ if (Astro.request.method === 'POST') {
 }
 
 const ok = Astro.url.searchParams.has('guardado') ? 'Cambios guardados. Ya se ven en la tienda.' : null;
+const zoneFormRows = Array.from({ length: MAX_SHIPPING_ZONES }, (_, i) => zoneValues[i] ?? { name: '', price: '', cod: false });
 const navRows = Array.from({ length: NAV_ROWS }, (_, i) => values.settings.nav[i] ?? { label: '', href: '' });
 ---
 
@@ -141,7 +168,43 @@ const navRows = Array.from({ length: NAV_ROWS }, (_, i) => values.settings.nav[i
           ))
         }
       </div>
-      <small class="muted">Se muestran en la sección «Cómo comprar». La pasarela en línea llegará en una fase posterior.</small>
+      <small class="muted">Se muestran en la sección «Cómo comprar» y al finalizar la compra. La pasarela en línea llegará en una fase posterior.</small>
+      <label class="field">
+        <span>Datos para Bre-B o transferencia</span>
+        <textarea name="transferInstructions" maxlength="1000" placeholder="Llave Bre-B: @artelicat&#10;Bancolombia ahorros 000-000000-00&#10;A nombre de …">{values.settings.transferInstructions ?? ''}</textarea>
+        <small>Se muestran a la clienta después de confirmar su pedido, junto con el valor a pagar. Si lo dejas vacío, le decimos que se los envías por WhatsApp.</small>
+      </label>
+    </section>
+
+    <section class="card">
+      <h2>Envíos</h2>
+      <p class="muted">
+        Destinos que la clienta elige al finalizar la compra. Deja el costo vacío para confirmarlo por WhatsApp. El pago contra
+        entrega solo aparece en los destinos marcados.
+      </p>
+      <div class="zones">
+        <span class="zone-head">Destino</span>
+        <span class="zone-head">Costo</span>
+        <span class="zone-head">Contra entrega</span>
+        {
+          zoneFormRows.map((z, i) => (
+            <>
+              <input type="text" name={`zone.${i}.name`} value={z.name} maxlength="60" aria-label={`Destino ${i + 1}`} placeholder={i === 0 ? 'Bogotá' : i === 1 ? 'Resto del país' : ''} />
+              <input type="text" name={`zone.${i}.price`} value={z.price} inputmode="numeric" aria-label={`Costo del destino ${i + 1}`} placeholder={i === 0 ? '8.000' : ''} />
+              <label class="check">
+                <input type="checkbox" name={`zone.${i}.cod`} checked={z.cod} />
+                <span class="cod-label">Sí</span>
+              </label>
+            </>
+          ))
+        }
+      </div>
+      <label class="field">
+        <span>Envío gratis desde</span>
+        <input type="text" name="freeShippingFrom" value={freeShippingText} inputmode="numeric" placeholder="Ej. 150.000" />
+        <small>Subtotal a partir del cual el envío no se cobra en ningún destino. Déjalo vacío si no aplica.</small>
+      </label>
+      {!saved && <small class="muted">Mientras no guardes destinos, la tienda muestra «Envío a todo Colombia» con costo por confirmar y sin contra entrega.</small>}
     </section>
 
     <section class="card">
@@ -194,3 +257,21 @@ const navRows = Array.from({ length: NAV_ROWS }, (_, i) => values.settings.nav[i
     </div>
   </form>
 </AdminLayout>
+
+<style>
+  .zones {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px 12px;
+  }
+  .zone-head {
+    font-weight: 600;
+    font-size: 14px;
+  }
+  @media (max-width: 559px) {
+    .cod-label {
+      display: none;
+    }
+  }
+</style>

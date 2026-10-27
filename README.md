@@ -41,9 +41,11 @@ src/
                  y sus campos editables (fields.ts)
     medios/      fotos: archivo en R2, datos en la tabla media
     catalogo/    productos, variantes, categorías y colecciones por temporada
+    pedidos/     carrito (cookie), checkout, pedidos y comprobantes de pago
   pages/
     index.astro  inicio de la tienda (pinta los bloques de la base)
     catalogo.astro, producto/, coleccion/   catálogo público
+    carrito.astro, finalizar.astro, pedido/  carrito, checkout y página del pedido
     admin/       panel: acceso, ajustes, contenido, fotos y tema
     media/       sirve las fotos desde R2
   db/schema.ts   esquema de la base (Drizzle)
@@ -71,6 +73,16 @@ El panel arma el formulario solo a partir de esa lista de campos.
 - **Categorías** permanentes para filtrar el catálogo y **colecciones** con fechas que aparecen y desaparecen solas.
 - Cada producto tiene su página (`/producto/<direccion>`) con datos estructurados para Google y un botón de WhatsApp que incluye producto, opción, precio y enlace.
 - El bloque *Productos* muestra en el inicio destacados, recientes, una colección o una categoría. «Catálogo» aparece en el menú cuando hay productos publicados.
+
+## Carrito y pedidos
+
+- **Carrito:** vive en una cookie por tienda que solo guarda producto, variante y cantidad. Precios, nombres y stock se leen siempre de la base; si algo se agotó o dejó de publicarse, el carrito lo quita y avisa. Funciona sin JavaScript.
+- **Finalizar compra** (`/finalizar`): nombre, celular colombiano, correo opcional, departamento, ciudad, dirección y notas; la clienta elige el **destino de envío** y el **pago**.
+- **Envíos** (*Ajustes generales → Envíos*): hasta 8 destinos con su costo (vacío = «por confirmar» por WhatsApp) y si admiten **contra entrega**. Opcional: envío gratis desde cierto subtotal. Sin destinos guardados se ofrece «Envío a todo Colombia» por confirmar y sin contra entrega.
+- **Bre-B / transferencia:** al confirmar, la página del pedido muestra el valor y los *Datos para Bre-B o transferencia* de los ajustes, y la clienta sube el comprobante (foto o PDF, máx. 5 MB). Los comprobantes van a R2 bajo `comprobantes/` y solo se ven desde el panel.
+- **Página del pedido** (`/pedido/<clave>`): enlace secreto y no indexado; muestra el estado y un botón para avisar por WhatsApp con el resumen.
+- **Panel → Pedidos:** lista con filtros y búsqueda, contador de pedidos por atender, detalle con comprobante, confirmar o rechazar el pago, confirmar pedidos contra entrega, cancelar o reabrir y nota interna.
+- Los pedidos copian nombre, opción, precio y foto de cada producto: no cambian si después se edita el catálogo. El stock todavía no se descuenta (Fase 5).
 
 ## Fotos
 
@@ -113,6 +125,6 @@ Luego abre `https://artelicat.<tu-subdominio>.workers.dev/admin/setup?token=<SET
 - [x] Fase 1: base multi-tienda, tema por tienda, panel con acceso, ajustes y editor de tema
 - [x] Fase 2: editor de bloques de contenido y biblioteca de fotos en R2
 - [x] Fase 3: catálogo con productos, variantes, categorías y colecciones por temporada
-- [ ] Fase 4: carrito y checkout con Bre-B/transferencia (comprobante) y contra entrega
+- [x] Fase 4: carrito y checkout con Bre-B/transferencia (comprobante) y contra entrega
 - [ ] Fase 5: pedidos, envíos y stock
 - [ ] Después: personalización de productos y pasarela en línea

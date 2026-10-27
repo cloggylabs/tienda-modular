@@ -1,0 +1,301 @@
+---
+// Página pública del pedido. Solo se llega con el enlace secreto que se muestra al finalizar la compra.
+import StoreLayout from '../../layouts/StoreLayout.astro';
+import Badge from '../../components/store/Badge.astro';
+import Icon from '../../components/store/Icon.astro';
+import { getDb } from '../../lib/db';
+import { formatCOP } from '../../modules/catalogo/format';
+import { formatPhone, newOrderMessage, orderCode, paymentMethodLabel, shippingLabel } from '../../modules/pedidos/format';
+import { getOrderByToken, listOrderItems, RECEIPT_TYPES, saveReceipt } from '../../modules/pedidos/repo';
+import { checkoutConfig, whatsappUrl } from '../../modules/tiendas/settings';
+
+const db = getDb();
+const store = Astro.locals.store!;
+// El enlace es la llave del pedido: que no viaje a otros sitios ni quede en buscadores.
+Astro.response.headers.set('Cache-Control', 'no-store');
+Astro.response.headers.set('X-Robots-Tag', 'noindex');
+Astro.response.headers.set('Referrer-Policy', 'no-referrer');
+
+const order = await getOrderByToken(db, store.id, Astro.params.token ?? '');
+if (!order) return Astro.rewrite('/404');
+const self = `/pedido/${order.token}`;
+
+// Se puede subir (o cambiar) el comprobante mientras el pago no esté confirmado.
+const canUpload = order.paymentMethod === 'transfer' && order.status !== 'cancelled' && order.paymentStatus !== 'paid';
+let error: string | null = null;
+if (Astro.request.method === 'POST' && canUpload) {
+  const form = await Astro.request.formData();
+  const file = form.get('comprobante');
+  error = await saveReceipt(db, order, file instanceof File ? file : null);
+  if (!error) return Astro.redirect(`${self}?comprobante=1`);
+}
+
+const items = await listOrderItems(db, order.id);
+const config = checkoutConfig(store.settings);
+const url = new URL(self, Astro.url.origin).toString();
+const notify = whatsappUrl(store.settings, newOrderMessage(order, items, store.settings.whatsappMessage, config.transferLabel, url));
+const transfer = order.paymentMethod === 'transfer';
+const needsPayment = canUpload && (order.paymentStatus === 'pending' || order.paymentStatus === 'rejected');
+
+const heading =
+  order.status === 'cancelled'
+    ? 'Este pedido fue cancelado.'
+    : order.paymentStatus === 'paid'
+      ? '¡Pago confirmado!'
+      : order.paymentStatus === 'review'
+        ? 'Estamos revisando tu pago.'
+        : order.paymentStatus === 'rejected'
+          ? 'Revisa tu comprobante.'
+          : transfer
+            ? '¡Pedido recibido! Solo falta el pago.'
+            : order.status === 'confirmed'
+              ? '¡Pedido confirmado!'
+              : '¡Pedido recibido!';
+const lead =
+  order.status === 'cancelled'
+    ? 'Si crees que es un error, escríbenos por WhatsApp.'
+    : order.paymentStatus === 'paid'
+      ? 'Ya estamos preparando tu pedido. Te avisamos por WhatsApp cuando salga.'
+      : order.paymentStatus === 'review'
+        ? 'Recibimos tu comprobante. Te confirmamos por WhatsApp apenas lo verifiquemos.'
+        : order.paymentStatus === 'rejected'
+          ? 'No pudimos verificar el comprobante que enviaste. Sube uno nuevo o escríbenos por WhatsApp.'
+          : transfer
+            ? 'Paga con los datos de abajo y sube el comprobante aquí mismo.'
+            : 'Te escribimos por WhatsApp para confirmar la entrega. Pagas en efectivo cuando lo recibas.';
+const accept = Object.keys(RECEIPT_TYPES).join(',');
+---
+
+<StoreLayout title={`Pedido ${orderCode(order)} — ${store.name}`}>
+  <section class="band head">
+    <Badge>Pedido {orderCode(order)}</Badge>
+    <h1 class="heading">{heading}</h1>
+    <p class="body-lg">{lead}</p>
+    {Astro.url.searchParams.has('comprobante') && !error && <p class="notice" role="status">¡Comprobante recibido, gracias!</p>}
+  </section>
+
+  <section class="band order">
+    <div class="main">
+      {
+        needsPayment && (
+          <article class="box pay">
+            <h2 class="heading-sm">Cómo pagar</h2>
+            <p class="amount">
+              <span>Valor a pagar</span>
+              <strong>{formatCOP(order.total)}</strong>
+            </p>
+            {order.shippingCost === null && <p class="small">El envío te lo confirmamos por WhatsApp y se paga aparte.</p>}
+            {config.transferInstructions ? (
+              <p class="instructions">{config.transferInstructions}</p>
+            ) : (
+              <p>Te enviamos los datos para pagar por WhatsApp.</p>
+            )}
+            <p class="small">En la descripción del pago escribe «Pedido {orderCode(order)}».</p>
+          </article>
+        )
+      }
+
+      {
+        canUpload && (
+          <form method="post" enctype="multipart/form-data" class="box upload" id="receipt">
+            <h2 class="heading-sm">{order.receiptKey ? 'Cambiar comprobante' : 'Subir comprobante'}</h2>
+            {error && (
+              <p class="notice" role="alert">
+                {error}
+              </p>
+            )}
+            <label class="field">
+              <span>Captura de pantalla o PDF del pago</span>
+              <input class="input" type="file" name="comprobante" accept={accept} required />
+              <small>Foto JPG, PNG o WebP, o PDF. Máximo 5 MB.</small>
+            </label>
+            <button class="btn btn-primary" type="submit">
+              Enviar comprobante
+            </button>
+          </form>
+        )
+      }
+
+      {
+        order.status !== 'cancelled' && (
+          <div class="box notify">
+            <p>¿Quieres avisarnos ya? Mándanos tu pedido por WhatsApp.</p>
+            <a class="btn btn-ghost" href={notify} target="_blank" rel="noopener noreferrer">
+              <Icon name="whatsapp" /> Avisar por WhatsApp
+            </a>
+          </div>
+        )
+      }
+      <p class="small">Guarda este enlace para volver a ver tu pedido.</p>
+    </div>
+
+    <aside class="box summary">
+      <h2 class="heading-sm">Resumen</h2>
+      <ul>
+        {
+          items.map((item) => (
+            <li>
+              <span>
+                {item.quantity} × {item.name}
+                {item.variantName && <small> · {item.variantName}</small>}
+              </span>
+              <span>{formatCOP(item.unitPrice * item.quantity)}</span>
+            </li>
+          ))
+        }
+      </ul>
+      <p class="row"><span>Subtotal</span><span>{formatCOP(order.subtotal)}</span></p>
+      <p class="row"><span>Envío ({order.shippingZone})</span><span>{shippingLabel(order.shippingCost)}</span></p>
+      <p class="row total"><span>Total</span><strong>{formatCOP(order.total)}</strong></p>
+      <dl>
+        <dt>Pago</dt>
+        <dd>{paymentMethodLabel(order, config)}</dd>
+        <dt>Entrega</dt>
+        <dd>
+          {order.customerName} · {formatPhone(order.phone)}<br />
+          {order.address}<br />
+          {order.city}, {order.department}
+        </dd>
+        {
+          order.notes && (
+            <>
+              <dt>Notas</dt>
+              <dd>{order.notes}</dd>
+            </>
+          )
+        }
+      </dl>
+    </aside>
+  </section>
+</StoreLayout>
+
+<script>
+  // Fotos muy pesadas (fotos de cámara): se reducen en el navegador antes de enviarlas.
+  const MAX_BYTES = 4 * 1024 * 1024;
+  const MAX_SIDE = 2000;
+  const input = document.querySelector<HTMLInputElement>('#receipt input[type=file]');
+  input?.addEventListener('change', async () => {
+    const file = input.files?.[0];
+    if (!file || file.size <= MAX_BYTES || !file.type.startsWith('image/') || typeof createImageBitmap !== 'function') return;
+    try {
+      const bitmap = await createImageBitmap(file);
+      const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(bitmap.width * scale);
+      canvas.height = Math.round(bitmap.height * scale);
+      canvas.getContext('2d')!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      bitmap.close();
+      const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', 0.85));
+      if (!blob) return;
+      const smaller = new DataTransfer();
+      smaller.items.add(new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', { type: 'image/jpeg' }));
+      input.files = smaller.files;
+    } catch {
+      // Si no se puede reducir, se envía tal cual y el servidor explica el problema.
+    }
+  });
+</script>
+
+<style>
+  .head {
+    display: grid;
+    justify-items: center;
+    gap: var(--spacing-16);
+    padding-bottom: var(--spacing-24);
+    text-align: center;
+  }
+  .head .body-lg {
+    max-width: 560px;
+  }
+  .order {
+    display: grid;
+    gap: var(--spacing-24);
+    align-items: start;
+    padding-top: var(--spacing-24);
+  }
+  .main {
+    display: grid;
+    gap: var(--spacing-24);
+  }
+  .box {
+    display: grid;
+    gap: var(--spacing-16);
+    padding: var(--spacing-24);
+    border: 1px solid var(--color-ink);
+    border-radius: var(--radius-images);
+  }
+  .pay {
+    background: var(--color-surface);
+  }
+  .amount {
+    display: grid;
+    gap: var(--spacing-4);
+  }
+  .amount span {
+    font-size: var(--text-caption);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .amount strong {
+    font-size: var(--text-heading-sm);
+    line-height: 1;
+  }
+  .instructions {
+    white-space: pre-line;
+    padding: var(--spacing-16);
+    border-radius: var(--radius-inputs);
+    background: var(--color-canvas);
+  }
+  .upload .btn,
+  .notify .btn {
+    justify-self: start;
+  }
+  .small {
+    font-size: var(--text-caption);
+  }
+  .summary {
+    gap: var(--spacing-12);
+  }
+  .summary ul {
+    display: grid;
+    gap: var(--spacing-8);
+    margin: 0;
+    padding: 0 0 var(--spacing-12);
+    list-style: none;
+    border-bottom: 1px solid var(--color-ink);
+  }
+  .summary li,
+  .row {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--spacing-12);
+  }
+  .summary small {
+    font-size: var(--text-caption);
+  }
+  .total {
+    font-size: var(--text-subheading);
+  }
+  dl {
+    display: grid;
+    gap: var(--spacing-4);
+    margin: var(--spacing-12) 0 0;
+    padding-top: var(--spacing-12);
+    border-top: 1px solid var(--color-ink);
+  }
+  dt {
+    margin-top: var(--spacing-8);
+    font-size: var(--text-caption);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  dd {
+    margin: 0;
+  }
+  @media (min-width: 900px) {
+    .order {
+      grid-template-columns: minmax(0, 1fr) 380px;
+      gap: var(--spacing-60);
+    }
+  }
+</style>

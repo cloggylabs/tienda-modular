@@ -11,6 +11,8 @@
   --a-ok: #1e6b34;
   --a-err-bg: #fdecea;
   --a-err: #a1261b;
+  --a-info-bg: #e8ecff;
+  --a-info: #2a3eb1;
   --a-radius: 10px;
   color-scheme: light;
 }

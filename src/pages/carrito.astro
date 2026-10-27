@@ -1,0 +1,268 @@
+---
+import StoreLayout from '../layouts/StoreLayout.astro';
+import Badge from '../components/store/Badge.astro';
+import ImageSlot from '../components/store/ImageSlot.astro';
+import { getDb } from '../lib/db';
+import { formatCOP } from '../modules/catalogo/format';
+import { listActiveProductsByIds } from '../modules/catalogo/repo';
+import { entryKey, readCart, resolveCart, setQuantity, toEntries, writeCart } from '../modules/pedidos/cart';
+import { checkoutConfig } from '../modules/tiendas/settings';
+
+const db = getDb();
+const store = Astro.locals.store!;
+const secure = Astro.url.protocol === 'https:';
+Astro.response.headers.set('Cache-Control', 'no-store');
+Astro.response.headers.set('X-Robots-Tag', 'noindex');
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('action') ?? '');
+  let entries = readCart(Astro.cookies, store.id);
+
+  if (action === 'add') {
+    const [product] = await listActiveProductsByIds(db, store.id, [Number(form.get('product'))].filter(Number.isInteger));
+    if (!product) return Astro.redirect('/carrito');
+    const variant = product.variants.find((v) => v.id === form.get('variante'));
+    if (product.variants.length && !variant) return Astro.redirect(`/producto/${product.slug}`);
+    const quantity = Math.max(1, Math.trunc(Number(form.get('cantidad'))) || 1);
+    const target = { productId: product.id, variantId: variant?.id ?? null };
+    const current = entries.find((e) => entryKey(e) === entryKey(target))?.quantity ?? 0;
+    entries = setQuantity(entries, target, current + quantity);
+    writeCart(Astro.cookies, store.id, entries, secure);
+    return Astro.redirect('/carrito?agregado=1');
+  }
+
+  // Botones de cada línea: sumar, restar o quitar.
+  const match = /^(\d+):([a-z0-9]{0,16})$/.exec(String(form.get('linea') ?? ''));
+  const line = match ? entries.find((e) => entryKey(e) === match[0]) : undefined;
+  if (line) {
+    const quantity = action === 'inc' ? line.quantity + 1 : action === 'dec' ? line.quantity - 1 : action === 'remove' ? 0 : line.quantity;
+    entries = setQuantity(entries, line, quantity);
+    writeCart(Astro.cookies, store.id, entries, secure);
+  }
+  return Astro.redirect('/carrito');
+}
+
+const cart = await resolveCart(db, store.id, readCart(Astro.cookies, store.id));
+if (cart.changed) writeCart(Astro.cookies, store.id, toEntries(cart.lines), secure);
+const config = checkoutConfig(store.settings);
+const added = Astro.url.searchParams.has('agregado');
+const freeMissing = config.freeShippingFrom && cart.subtotal < config.freeShippingFrom ? config.freeShippingFrom - cart.subtotal : 0;
+---
+
+<StoreLayout title={`Carrito — ${store.name}`}>
+  <section class="band head">
+    <Badge>{store.name}</Badge>
+    <h1 class="heading">Tu carrito</h1>
+  </section>
+
+  <section class="band cart">
+    {added && cart.lines.length > 0 && <p class="notice" role="status">Agregado al carrito.</p>}
+    {
+      cart.notices.length > 0 && (
+        <div class="notice" role="alert">
+          <ul>
+            {cart.notices.map((n) => (
+              <li>{n}</li>
+            ))}
+          </ul>
+        </div>
+      )
+    }
+
+    {
+      cart.lines.length === 0 ? (
+        <div class="empty">
+          <p class="body-lg">Tu carrito está vacío.</p>
+          <a class="btn btn-primary" href="/catalogo">
+            Ver el catálogo
+          </a>
+        </div>
+      ) : (
+        <div class="layout">
+          <ul class="lines">
+            {cart.lines.map((l) => (
+              <li class="line">
+                <a class="thumb" href={`/producto/${l.product.slug}`} tabindex="-1" aria-hidden="true">
+                  <ImageSlot src={l.product.images[0]} alt="" label="" />
+                </a>
+                <div class="what">
+                  <a class="name" href={`/producto/${l.product.slug}`}>
+                    {l.product.name}
+                  </a>
+                  {l.variant && <span class="variant">{l.variant.name}</span>}
+                  <span class="unit">{formatCOP(l.unitPrice)} c/u</span>
+                </div>
+                <form method="post" class="qty" aria-label={`Cantidad de ${l.product.name}`}>
+                  <input type="hidden" name="linea" value={l.key} />
+                  <button type="submit" name="action" value="dec" aria-label="Quitar una unidad">
+                    −
+                  </button>
+                  <output aria-live="polite">{l.quantity}</output>
+                  <button type="submit" name="action" value="inc" aria-label="Agregar una unidad" disabled={l.quantity >= l.max}>
+                    +
+                  </button>
+                  <button class="remove" type="submit" name="action" value="remove">
+                    Quitar
+                  </button>
+                </form>
+                <span class="total">{formatCOP(l.total)}</span>
+              </li>
+            ))}
+          </ul>
+
+          <aside class="summary">
+            <p class="row">
+              <span>Subtotal</span>
+              <strong>{formatCOP(cart.subtotal)}</strong>
+            </p>
+            <p class="small">El envío y la forma de pago los eliges al finalizar.</p>
+            {freeMissing > 0 && <p class="small">Te faltan {formatCOP(freeMissing)} para el envío gratis.</p>}
+            <a class="btn btn-primary" href="/finalizar">
+              Finalizar compra
+            </a>
+            <a class="text-link" href="/catalogo">
+              Seguir comprando
+            </a>
+          </aside>
+        </div>
+      )
+    }
+  </section>
+</StoreLayout>
+
+<style>
+  .head {
+    display: grid;
+    justify-items: center;
+    gap: var(--spacing-16);
+    padding-bottom: var(--spacing-24);
+    text-align: center;
+  }
+  .cart {
+    display: grid;
+    gap: var(--spacing-24);
+    padding-top: var(--spacing-24);
+  }
+  .empty {
+    display: grid;
+    justify-items: center;
+    gap: var(--spacing-24);
+    padding: var(--spacing-36) 0;
+    text-align: center;
+  }
+  .layout {
+    display: grid;
+    gap: var(--spacing-36);
+    align-items: start;
+  }
+  .lines {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border-top: 1px solid var(--color-ink);
+  }
+  .line {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr) auto;
+    grid-template-areas: 'thumb what total' 'thumb qty qty';
+    gap: var(--spacing-8) var(--spacing-16);
+    padding: var(--spacing-16) 0;
+    border-bottom: 1px solid var(--color-ink);
+  }
+  .thumb {
+    grid-area: thumb;
+  }
+  .thumb :global(.placeholder) {
+    padding: 0;
+  }
+  .what {
+    grid-area: what;
+    display: grid;
+    align-content: start;
+    gap: var(--spacing-4);
+  }
+  .name {
+    font-weight: var(--font-weight-medium);
+    text-decoration: none;
+  }
+  .name:hover {
+    text-decoration: underline;
+  }
+  .variant,
+  .unit {
+    font-size: var(--text-caption);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .total {
+    grid-area: total;
+    font-weight: var(--font-weight-bold);
+  }
+  .qty {
+    grid-area: qty;
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-8);
+  }
+  .qty button {
+    min-width: 40px;
+    height: 40px;
+    border: 1px solid var(--color-ink);
+    border-radius: var(--radius-buttons);
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font: inherit;
+    cursor: pointer;
+  }
+  .qty button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .qty output {
+    min-width: 28px;
+    text-align: center;
+    font-weight: var(--font-weight-bold);
+  }
+  .qty .remove {
+    margin-left: auto;
+    border-color: transparent;
+    background: none;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .summary {
+    display: grid;
+    gap: var(--spacing-16);
+    padding: var(--spacing-24);
+    border: 1px solid var(--color-ink);
+    border-radius: var(--radius-images);
+    background: var(--color-surface);
+  }
+  .summary .row {
+    display: flex;
+    justify-content: space-between;
+    font-size: var(--text-subheading);
+  }
+  .summary .text-link {
+    justify-self: center;
+  }
+  .small {
+    font-size: var(--text-caption);
+  }
+  @media (min-width: 900px) {
+    .layout {
+      grid-template-columns: minmax(0, 1fr) 340px;
+    }
+    .summary {
+      position: sticky;
+      top: var(--spacing-24);
+    }
+    .line {
+      grid-template-columns: 96px minmax(0, 1fr) auto auto;
+      grid-template-areas: 'thumb what qty total';
+      align-items: center;
+    }
+  }
+</style>

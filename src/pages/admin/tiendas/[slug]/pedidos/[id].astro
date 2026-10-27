@@ -1,0 +1,320 @@
+---
+import AdminLayout from '../../../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../../../lib/db';
+import { getStoreBySlug } from '../../../../../modules/tiendas/repo';
+import { getOrder, listOrderItems, updateOrder } from '../../../../../modules/pedidos/repo';
+import { formatCOP } from '../../../../../modules/catalogo/format';
+import {
+  ORDER_STATUS_LABELS,
+  PAYMENT_STATUS_LABELS,
+  formatDateTime,
+  formatPhone,
+  orderActions,
+  orderCode,
+  paymentMethodLabel,
+  shippingLabel,
+} from '../../../../../modules/pedidos/format';
+import { checkoutConfig } from '../../../../../modules/tiendas/settings';
+
+const db = getDb();
+const store = await getStoreBySlug(db, Astro.params.slug!);
+if (!store) return new Response(null, { status: 404 });
+const id = Number(Astro.params.id);
+const order = Number.isInteger(id) && id > 0 ? await getOrder(db, store.id, id) : undefined;
+if (!order) return Astro.rewrite('/404');
+const base = `/admin/tiendas/${store.slug}/pedidos`;
+const self = `${base}/${order.id}`;
+const actions = orderActions(order);
+
+const MESSAGES: Record<string, string> = {
+  confirm_payment: 'Pago confirmado. El pedido quedó confirmado.',
+  reject_receipt: 'Comprobante rechazado. La clienta puede subir otro desde el enlace de su pedido.',
+  confirm_order: 'Pedido confirmado.',
+  cancel: 'Pedido cancelado.',
+  reopen: 'Pedido reabierto.',
+  note: 'Nota guardada.',
+};
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('action') ?? '');
+  if (action === 'note') {
+    await updateOrder(db, store.id, order.id, { adminNote: String(form.get('adminNote') ?? '').trim().slice(0, 2000) });
+    return Astro.redirect(`${self}?ok=note`);
+  }
+  // Solo las acciones que permite el estado actual (evita, por ejemplo, confirmar un pedido cancelado).
+  const chosen = actions.find((a) => a.action === action);
+  if (chosen) {
+    await updateOrder(db, store.id, order.id, chosen.patch);
+    return Astro.redirect(`${self}?ok=${chosen.action}`);
+  }
+  return Astro.redirect(self);
+}
+
+const items = await listOrderItems(db, order.id);
+const config = checkoutConfig(store.settings);
+const ok = MESSAGES[Astro.url.searchParams.get('ok') ?? ''] ?? null;
+const firstName = order.customerName.split(' ')[0];
+const chat = `https://wa.me/${order.phone}?text=${encodeURIComponent(
+  `¡Hola ${firstName}! Te escribimos de ${store.name} por tu pedido ${orderCode(order)}.`,
+)}`;
+const receipt = `${self}/comprobante`;
+const isPdf = order.receiptType === 'application/pdf';
+const publicUrl = `/pedido/${order.token}?tienda=${store.slug}`;
+---
+
+<AdminLayout title={`Pedido ${orderCode(order)} · ${store.name}`} current={store.slug} section="pedidos">
+  <a class="back muted" href={base}>← Pedidos</a>
+  <div class="row between">
+    <div class="stack">
+      <h1>Pedido {orderCode(order)}</h1>
+      <p class="muted">Hecho el {formatDateTime(order.createdAt)} · {paymentMethodLabel(order, config)}</p>
+    </div>
+    <div class="tags">
+      <span class:list={['tag', order.status]}>{ORDER_STATUS_LABELS[order.status]}</span>
+      {
+        order.status !== 'cancelled' && (order.paymentMethod === 'transfer' || order.paymentStatus === 'paid') && (
+          <span class:list={['tag', `pay-${order.paymentStatus}`]}>{PAYMENT_STATUS_LABELS[order.paymentStatus]}</span>
+        )
+      }
+    </div>
+  </div>
+  {ok && <div class="alert ok" role="status">{ok}</div>}
+
+  <section class="card">
+    <h2>Acciones</h2>
+    <form method="post" class="row">
+      {
+        actions.map((a, i) => (
+          <button
+            class:list={['button', { secondary: i > 0 || a.action === 'reopen', danger: a.action === 'cancel' }]}
+            name="action"
+            value={a.action}
+            data-confirm={a.action === 'cancel' ? '¿Cancelar este pedido?' : a.action === 'reject_receipt' ? '¿Rechazar el comprobante?' : undefined}
+          >
+            {a.label}
+          </button>
+        ))
+      }
+      <a class="button secondary" href={chat} target="_blank" rel="noopener">Escribirle por WhatsApp</a>
+    </form>
+    {
+      order.paymentMethod === 'transfer' && order.paymentStatus === 'review' && (
+        <p class="muted">Revisa en tu banco que el dinero llegó antes de confirmar el pago.</p>
+      )
+    }
+  </section>
+
+  {
+    order.paymentMethod === 'transfer' && (
+      <section class="card">
+        <h2>Comprobante</h2>
+        {order.receiptKey ? (
+          <>
+            <p class="muted">Subido el {formatDateTime(order.receiptAt!)}</p>
+            {isPdf ? (
+              <a class="button secondary" href={receipt} target="_blank" rel="noopener">
+                Abrir PDF ↗
+              </a>
+            ) : (
+              <a href={receipt} target="_blank" rel="noopener" class="receipt">
+                <img src={receipt} alt={`Comprobante del pedido ${orderCode(order)}`} />
+              </a>
+            )}
+          </>
+        ) : (
+          <p class="muted">La clienta todavía no ha subido el comprobante.</p>
+        )}
+      </section>
+    )
+  }
+
+  <div class="grid-2">
+    <section class="card">
+      <h2>Productos</h2>
+      <ul class="items">
+        {
+          items.map((item) => (
+            <li>
+              <span class="thumb">{item.image ? <img src={item.image} alt="" loading="lazy" /> : null}</span>
+              <span class="what">
+                {item.productId ? (
+                  <a href={`/admin/tiendas/${store.slug}/productos/${item.productId}`}>{item.name}</a>
+                ) : (
+                  item.name
+                )}
+                <small class="muted">
+                  {item.variantName && `${item.variantName} · `}
+                  {item.quantity} × {formatCOP(item.unitPrice)}
+                </small>
+              </span>
+              <span>{formatCOP(item.unitPrice * item.quantity)}</span>
+            </li>
+          ))
+        }
+      </ul>
+      <dl class="totals">
+        <dt>Subtotal</dt>
+        <dd>{formatCOP(order.subtotal)}</dd>
+        <dt>Envío ({order.shippingZone})</dt>
+        <dd>{shippingLabel(order.shippingCost)}</dd>
+        <dt>Total</dt>
+        <dd><strong>{formatCOP(order.total)}</strong></dd>
+      </dl>
+    </section>
+
+    <section class="card">
+      <h2>Entrega</h2>
+      <dl class="data">
+        <dt>Nombre</dt>
+        <dd>{order.customerName}</dd>
+        <dt>Celular</dt>
+        <dd><a href={chat} target="_blank" rel="noopener">{formatPhone(order.phone)}</a></dd>
+        {
+          order.email && (
+            <>
+              <dt>Correo</dt>
+              <dd><a href={`mailto:${order.email}`}>{order.email}</a></dd>
+            </>
+          )
+        }
+        <dt>Dirección</dt>
+        <dd>{order.address}<br />{order.city}, {order.department}</dd>
+        {
+          order.notes && (
+            <>
+              <dt>Notas de la clienta</dt>
+              <dd class="pre">{order.notes}</dd>
+            </>
+          )
+        }
+      </dl>
+      <a class="button link" href={publicUrl} target="_blank" rel="noopener">Ver la página del pedido que ve la clienta ↗</a>
+    </section>
+  </div>
+
+  <form method="post" class="card">
+    <h2>Nota interna</h2>
+    <label class="field">
+      <span class="visually-hidden">Nota interna</span>
+      <textarea name="adminNote" maxlength="2000" placeholder="Solo la ves tú: guía de envío, acuerdos con la clienta…">{order.adminNote}</textarea>
+    </label>
+    <div class="row">
+      <button class="button secondary" name="action" value="note">Guardar nota</button>
+    </div>
+  </form>
+</AdminLayout>
+
+<script>
+  document.querySelectorAll<HTMLButtonElement>('[data-confirm]').forEach((button) =>
+    button.addEventListener('click', (event) => {
+      if (!confirm(button.dataset.confirm!)) event.preventDefault();
+    }),
+  );
+</script>
+
+<style>
+  .back {
+    text-decoration: none;
+    font-size: 14px;
+  }
+  .between {
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .tag {
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: var(--a-bg);
+    color: var(--a-muted);
+    font-size: 13px;
+  }
+  .tag.new,
+  .tag.pay-review {
+    background: var(--a-info-bg);
+    color: var(--a-info);
+  }
+  .tag.confirmed,
+  .tag.pay-paid {
+    background: var(--a-ok-bg);
+    color: var(--a-ok);
+  }
+  .tag.pay-rejected {
+    background: var(--a-err-bg);
+    color: var(--a-err);
+  }
+  .button.danger {
+    border-color: var(--a-err);
+    color: var(--a-err);
+  }
+  .receipt img {
+    max-width: min(100%, 420px);
+    max-height: 600px;
+    border: 1px solid var(--a-line);
+    border-radius: 8px;
+  }
+  .items {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .items li {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+  }
+  .thumb {
+    width: 44px;
+    aspect-ratio: 4 / 5;
+    overflow: hidden;
+    border-radius: 6px;
+    background: var(--a-bg);
+  }
+  .thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .what {
+    display: grid;
+  }
+  .totals,
+  .data {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 16px;
+    margin: 0;
+  }
+  .totals {
+    padding-top: 12px;
+    border-top: 1px solid var(--a-line);
+  }
+  .totals dd {
+    text-align: right;
+  }
+  dt {
+    color: var(--a-muted);
+  }
+  dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+  .pre {
+    white-space: pre-line;
+  }
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+</style>

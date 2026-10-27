@@ -5,7 +5,8 @@ import Icon from '../../components/store/Icon.astro';
 import ImageSlot from '../../components/store/ImageSlot.astro';
 import ProductGrid from '../../components/store/ProductGrid.astro';
 import { getDb } from '../../lib/db';
-import { formatCOP, orderMessage, stockState, variantPrice } from '../../modules/catalogo/format';
+import { availableUnits, formatCOP, orderMessage, stockState, variantPrice } from '../../modules/catalogo/format';
+import { MAX_QUANTITY } from '../../modules/pedidos/cart';
 import { getActiveProduct, listActiveProducts, listCategories, productActiveCollections } from '../../modules/catalogo/repo';
 import { whatsappUrl } from '../../modules/tiendas/settings';
 
@@ -32,7 +33,8 @@ const options = (product.variants.length ? product.variants : [undefined]).map((
   const message = state.available
     ? orderMessage({ greeting, product, variant, price, url })
     : `${greeting.trim()}\n\n¿Cuándo vuelve a estar disponible ${product.name}${variant ? ` (${variant.name})` : ''}?\n${url}`;
-  return { variant, price, state, href: whatsappUrl(store.settings, message) };
+  const max = Math.max(1, Math.min(MAX_QUANTITY, availableUnits(product, variant) ?? MAX_QUANTITY));
+  return { variant, price, state, max, href: whatsappUrl(store.settings, message) };
 });
 const first = options.find((o) => o.state.available) ?? options[0]!;
 const onSale = product.compareAtPrice && product.compareAtPrice > first.price;
@@ -108,34 +110,48 @@ const jsonLdHtml = JSON.stringify(jsonLd).replace(/</g, '\\u003c');
       </p>
       <p class:list={['state', { out: !first.state.available }]} data-state>{first.state.label}</p>
 
-      {
-        product.variants.length > 0 && (
-          <fieldset class="variants">
-            <legend>Opciones</legend>
-            {options.map((o) => (
-              <label class:list={{ out: !o.state.available }}>
-                <input
-                  type="radio"
-                  name="variante"
-                  value={o.variant!.id}
-                  checked={o === first}
-                  data-price={formatCOP(o.price)}
-                  data-state={o.state.label}
-                  data-available={String(o.state.available)}
-                  data-href={o.href}
-                />
-                <span>{o.variant!.name}</span>
-              </label>
-            ))}
-          </fieldset>
-        )
-      }
+      <form method="post" action="/carrito" class="buy">
+        <input type="hidden" name="action" value="add" />
+        <input type="hidden" name="product" value={product.id} />
+        {
+          product.variants.length > 0 && (
+            <fieldset class="variants">
+              <legend>Opciones</legend>
+              {options.map((o) => (
+                <label class:list={{ out: !o.state.available }}>
+                  <input
+                    type="radio"
+                    name="variante"
+                    value={o.variant!.id}
+                    checked={o === first}
+                    data-price={formatCOP(o.price)}
+                    data-state={o.state.label}
+                    data-available={String(o.state.available)}
+                    data-max={o.max}
+                    data-href={o.href}
+                  />
+                  <span>{o.variant!.name}</span>
+                </label>
+              ))}
+            </fieldset>
+          )
+        }
+        <div class="add-row">
+          <label class="qty">
+            <span>Cantidad</span>
+            <input class="input" type="number" name="cantidad" value="1" min="1" max={first.max} inputmode="numeric" data-qty />
+          </label>
+          <button class="btn btn-primary add" type="submit" disabled={!first.state.available} data-add>
+            <Icon name="bag" />
+            <span data-add-label>{first.state.available ? 'Agregar al carrito' : 'Agotado'}</span>
+          </button>
+        </div>
+      </form>
 
-      <a class="btn btn-primary order" href={first.href} target="_blank" rel="noopener" data-order>
+      <a class="text-link order" href={first.href} target="_blank" rel="noopener" data-order>
         <Icon name="whatsapp" />
-        <span data-order-label>{first.state.available ? 'Pedir por WhatsApp' : 'Preguntar cuándo llega'}</span>
+        <span data-order-label>{first.state.available ? 'O pídelo por WhatsApp' : 'Preguntar cuándo llega'}</span>
       </a>
-      <p class="note">Te respondemos por WhatsApp para confirmar el pedido, el pago y el envío.</p>
 
       {paragraphs.length > 0 && <div class="description">{paragraphs.map((p) => <p>{p}</p>)}</div>}
     </div>
@@ -161,11 +177,14 @@ const jsonLdHtml = JSON.stringify(jsonLd).replace(/</g, '\\u003c');
     }),
   );
 
-  // Variantes: actualizan precio, disponibilidad y el mensaje de WhatsApp.
+  // Variantes: actualizan precio, disponibilidad, el botón del carrito y el mensaje de WhatsApp.
   const price = document.querySelector<HTMLElement>('[data-price]');
   const state = document.querySelector<HTMLElement>('[data-state]');
   const order = document.querySelector<HTMLAnchorElement>('[data-order]');
   const label = document.querySelector<HTMLElement>('[data-order-label]');
+  const add = document.querySelector<HTMLButtonElement>('[data-add]');
+  const addLabel = document.querySelector<HTMLElement>('[data-add-label]');
+  const qty = document.querySelector<HTMLInputElement>('[data-qty]');
   document.querySelectorAll<HTMLInputElement>('input[name=variante]').forEach((input) =>
     input.addEventListener('change', () => {
       const available = input.dataset.available === 'true';
@@ -175,7 +194,13 @@ const jsonLdHtml = JSON.stringify(jsonLd).replace(/</g, '\\u003c');
         state.classList.toggle('out', !available);
       }
       if (order) order.href = input.dataset.href!;
-      if (label) label.textContent = available ? 'Pedir por WhatsApp' : 'Preguntar cuándo llega';
+      if (label) label.textContent = available ? 'O pídelo por WhatsApp' : 'Preguntar cuándo llega';
+      if (add) add.disabled = !available;
+      if (addLabel) addLabel.textContent = available ? 'Agregar al carrito' : 'Agotado';
+      if (qty) {
+        qty.max = input.dataset.max!;
+        if (Number(qty.value) > Number(qty.max)) qty.value = qty.max;
+      }
     }),
   );
 </script>
@@ -302,11 +327,37 @@ const jsonLdHtml = JSON.stringify(jsonLd).replace(/</g, '\\u003c');
     opacity: 0.55;
     text-decoration: line-through;
   }
-  .order {
+  .buy {
+    display: grid;
+    gap: var(--spacing-16);
     width: 100%;
   }
-  .note {
+  .add-row {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    align-items: end;
+    gap: var(--spacing-12);
+  }
+  .qty {
+    display: grid;
+    gap: var(--spacing-4);
     font-size: var(--text-caption);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .qty .input {
+    padding-block: var(--spacing-16);
+    text-align: center;
+  }
+  .add[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+  .order {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-8);
   }
   .description {
     width: 100%;

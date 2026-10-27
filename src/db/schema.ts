@@ -173,6 +173,73 @@ export const productCollections = sqliteTable(
   (t) => [primaryKey({ columns: [t.productId, t.collectionId] }), index('product_collections_collection_idx').on(t.collectionId)],
 );
 
+export type OrderStatus = 'new' | 'confirmed' | 'cancelled';
+export type PaymentMethod = 'transfer' | 'cod';
+/** pending: falta pagar · review: subió comprobante · paid: pago confirmado · rejected: comprobante rechazado. */
+export type PaymentStatus = 'pending' | 'review' | 'paid' | 'rejected';
+
+/** Pedidos hechos desde el carrito. Los precios y nombres se copian: no cambian si luego se edita el producto. */
+export const orders = sqliteTable(
+  'orders',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    storeId: integer('store_id')
+      .notNull()
+      .references(() => stores.id, { onDelete: 'cascade' }),
+    /** Número visible para la clienta (#1001), consecutivo por tienda. */
+    number: integer('number').notNull(),
+    /** Clave secreta de la página pública del pedido (/pedido/<token>). */
+    token: text('token').notNull().unique(),
+    status: text('status').$type<OrderStatus>().notNull().default('new'),
+    paymentMethod: text('payment_method').$type<PaymentMethod>().notNull(),
+    paymentStatus: text('payment_status').$type<PaymentStatus>().notNull().default('pending'),
+    customerName: text('customer_name').notNull(),
+    /** Celular con indicativo, solo dígitos (57300…). */
+    phone: text('phone').notNull(),
+    email: text('email').notNull().default(''),
+    department: text('department').notNull(),
+    city: text('city').notNull(),
+    address: text('address').notNull(),
+    notes: text('notes').notNull().default(''),
+    shippingZone: text('shipping_zone').notNull(),
+    /** Costo del envío en COP; null = se confirma por WhatsApp. */
+    shippingCost: integer('shipping_cost'),
+    subtotal: integer('subtotal').notNull(),
+    total: integer('total').notNull(),
+    /** Comprobante en R2 (privado, solo se ve desde el panel). */
+    receiptKey: text('receipt_key'),
+    receiptType: text('receipt_type'),
+    receiptAt: integer('receipt_at', { mode: 'timestamp' }),
+    adminNote: text('admin_note').notNull().default(''),
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex('orders_store_number_idx').on(t.storeId, t.number),
+    index('orders_store_status_idx').on(t.storeId, t.status, t.createdAt),
+  ],
+);
+
+export const orderItems = sqliteTable(
+  'order_items',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    storeId: integer('store_id')
+      .notNull()
+      .references(() => stores.id, { onDelete: 'cascade' }),
+    orderId: integer('order_id')
+      .notNull()
+      .references(() => orders.id, { onDelete: 'cascade' }),
+    productId: integer('product_id').references(() => products.id, { onDelete: 'set null' }),
+    variantId: text('variant_id'),
+    name: text('name').notNull(),
+    variantName: text('variant_name').notNull().default(''),
+    unitPrice: integer('unit_price').notNull(),
+    quantity: integer('quantity').notNull(),
+    image: text('image'),
+  },
+  (t) => [index('order_items_order_idx').on(t.orderId)],
+);
+
 /** Personas que entran al panel. Pueden administrar todas las tiendas. */
 export const adminUsers = sqliteTable(
   'admin_users',
@@ -209,5 +276,7 @@ export type Media = typeof media.$inferSelect;
 export type Category = typeof categories.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type Collection = typeof collections.$inferSelect;
+export type Order = typeof orders.$inferSelect;
+export type OrderItem = typeof orderItems.$inferSelect;
 export type AdminUser = typeof adminUsers.$inferSelect;
 

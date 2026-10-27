@@ -2,16 +2,18 @@
 import '../styles/admin.css';
 import { getDb } from '../lib/db';
 import { listStores } from '../modules/tiendas/repo';
+import { newOrderCounts } from '../modules/pedidos/repo';
 
 interface Props {
   title: string;
   /** slug de la tienda activa en el menú */
   current?: string;
-  section?: 'general' | 'tema' | 'contenido' | 'fotos' | 'productos' | 'categorias' | 'colecciones';
+  section?: 'general' | 'tema' | 'contenido' | 'fotos' | 'productos' | 'categorias' | 'colecciones' | 'pedidos';
 }
 const { title, current, section } = Astro.props;
 const user = Astro.locals.user!;
-const stores = await listStores(getDb());
+const db = getDb();
+const [stores, pending] = await Promise.all([listStores(db), newOrderCounts(db)]);
 ---
 
 <!doctype html>
@@ -33,9 +35,15 @@ const stores = await listStores(getDb());
                 <a class="store-name" href={`/admin/tiendas/${s.slug}`}>
                   <span class="dot" style={`background:${s.theme.colors.band}`} />
                   {s.name}
+                  {pending.get(s.id) ? <span class="badge" title="Pedidos por atender">{pending.get(s.id)}</span> : null}
                 </a>
                 {s.slug === current && (
                   <ul>
+                    <li>
+                      <a href={`/admin/tiendas/${s.slug}/pedidos`} aria-current={section === 'pedidos' ? 'page' : undefined}>
+                        Pedidos
+                      </a>
+                    </li>
                     <li>
                       <a href={`/admin/tiendas/${s.slug}`} aria-current={section === 'general' ? 'page' : undefined}>
                         Ajustes generales
@@ -82,7 +90,7 @@ const stores = await listStores(getDb());
             ))
           }
         </nav>
-        <p class="soon muted">Próximamente: carrito, pedidos y envíos.</p>
+        <p class="soon muted">Próximamente: estados de envío y descuento de stock.</p>
         <form method="post" action="/admin/logout" class="who">
           <span>{user.name}</span>
           <button class="button link" type="submit">Cerrar sesión</button>
@@ -128,6 +136,16 @@ const stores = await listStores(getDb());
   .store.active .store-name,
   .store-name:hover {
     background: var(--a-bg);
+  }
+  .badge {
+    margin-left: auto;
+    min-width: 22px;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--a-accent);
+    color: var(--a-accent-ink);
+    font-size: 12px;
+    text-align: center;
   }
   .dot {
     width: 12px;

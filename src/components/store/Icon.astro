@@ -1,7 +1,7 @@
 ---
 // Glifos de línea mínimos, trazo en currentColor.
 interface Props {
-  name: 'instagram' | 'whatsapp' | 'arrow' | 'sparkle';
+  name: 'instagram' | 'whatsapp' | 'arrow' | 'sparkle' | 'bag';
   size?: number;
 }
 const { name, size = 18 } = Astro.props;
@@ -36,6 +36,14 @@ const { name, size = 18 } = Astro.props;
     )
   }
   {name === 'arrow' && <path d="M4 12h15m-5-5 5 5-5 5" />}
+  {
+    name === 'bag' && (
+      <>
+        <path d="M5 8h14l-1.2 12H6.2z" />
+        <path d="M9 10V6.5a3 3 0 0 1 6 0V10" />
+      </>
+    )
+  }
   {
     name === 'sparkle' && (
       <path d="M12 3v4m0 10v4M3 12h4m10 0h4M6 6l2.5 2.5m7 7L18 18M18 6l-2.5 2.5m-7 7L6 18" />

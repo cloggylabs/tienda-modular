@@ -1,0 +1,180 @@
+---
+import AdminLayout from '../../../../../layouts/AdminLayout.astro';
+import { getDb } from '../../../../../lib/db';
+import { getStoreBySlug } from '../../../../../modules/tiendas/repo';
+import { itemCounts, listOrders } from '../../../../../modules/pedidos/repo';
+import { formatCOP } from '../../../../../modules/catalogo/format';
+import {
+  ORDER_STATUS_LABELS,
+  PAYMENT_STATUS_LABELS,
+  formatDateTime,
+  orderCode,
+  paymentMethodLabel,
+} from '../../../../../modules/pedidos/format';
+import type { OrderStatus } from '../../../../../db/schema';
+
+const db = getDb();
+const store = await getStoreBySlug(db, Astro.params.slug!);
+if (!store) return new Response(null, { status: 404 });
+const base = `/admin/tiendas/${store.slug}/pedidos`;
+
+const q = (Astro.url.searchParams.get('q') ?? '').trim().slice(0, 80);
+const statusParam = Astro.url.searchParams.get('estado') ?? '';
+const status = (Object.keys(ORDER_STATUS_LABELS) as OrderStatus[]).find((s) => s === statusParam);
+
+const orders = await listOrders(db, store.id, { status, q: q || undefined });
+const counts = await itemCounts(
+  db,
+  orders.map((o) => o.id),
+);
+const tabs: { label: string; value?: OrderStatus }[] = [
+  { label: 'Todos' },
+  ...(Object.entries(ORDER_STATUS_LABELS) as [OrderStatus, string][]).map(([value, label]) => ({ label, value })),
+];
+const href = (value?: OrderStatus) => {
+  const params = new URLSearchParams();
+  if (value) params.set('estado', value);
+  if (q) params.set('q', q);
+  const query = params.toString();
+  return query ? `${base}?${query}` : base;
+};
+---
+
+<AdminLayout title={`Pedidos de ${store.name}`} current={store.slug} section="pedidos">
+  <div class="stack">
+    <h1>Pedidos</h1>
+    <p class="muted">Los pedidos que llegan desde el carrito de {store.name}. Los más recientes primero.</p>
+  </div>
+
+  <nav class="tabs" aria-label="Filtrar por estado">
+    {
+      tabs.map((t) => (
+        <a href={href(t.value)} aria-current={status === t.value ? 'page' : undefined}>
+          {t.label}
+        </a>
+      ))
+    }
+  </nav>
+
+  <form method="get" class="row filters">
+    {status && <input type="hidden" name="estado" value={status} />}
+    <input type="text" name="q" value={q} placeholder="Buscar por número, nombre o celular" aria-label="Buscar" />
+    <button class="button secondary" type="submit">Buscar</button>
+    {q && <a class="button link" href={href(status)}>Limpiar</a>}
+  </form>
+
+  {
+    orders.length === 0 ? (
+      <div class="card">
+        <p>{q || status ? 'No hay pedidos con ese filtro.' : 'Todavía no han llegado pedidos.'}</p>
+      </div>
+    ) : (
+      <ul class="list">
+        {orders.map((o) => (
+          <li class="card item">
+            <div class="info">
+              <a class="name" href={`${base}/${o.id}`}>
+                {orderCode(o)} · {o.customerName}
+              </a>
+              <span class="muted">
+                {formatDateTime(o.createdAt)} · {counts.get(o.id) ?? 0} productos · {formatCOP(o.total)} · {paymentMethodLabel(o)}
+              </span>
+            </div>
+            <div class="tags">
+              <span class:list={['tag', o.status]}>{ORDER_STATUS_LABELS[o.status]}</span>
+              {o.status !== 'cancelled' && (o.paymentMethod === 'transfer' || o.paymentStatus === 'paid') && (
+                <span class:list={['tag', `pay-${o.paymentStatus}`]}>{PAYMENT_STATUS_LABELS[o.paymentStatus]}</span>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    )
+  }
+</AdminLayout>
+
+<style>
+  .tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .tabs a {
+    padding: 6px 12px;
+    border: 1px solid var(--a-line);
+    border-radius: 999px;
+    background: var(--a-panel);
+    text-decoration: none;
+    font-size: 14px;
+  }
+  .tabs a[aria-current='page'] {
+    border-color: var(--a-ink);
+    background: var(--a-ink);
+    color: #fff;
+  }
+  .filters input {
+    flex: 1 1 260px;
+    width: auto;
+  }
+  .list {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .item {
+    display: grid;
+    gap: 8px 14px;
+    padding: 12px 16px;
+  }
+  .info {
+    display: grid;
+    min-width: 0;
+  }
+  .name {
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .name:hover {
+    text-decoration: underline;
+  }
+  .info .muted {
+    font-size: 14px;
+  }
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .tag {
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: var(--a-bg);
+    color: var(--a-muted);
+    font-size: 12px;
+  }
+  .tag.new,
+  .tag.pay-review {
+    background: var(--a-info-bg);
+    color: var(--a-info);
+  }
+  .tag.confirmed,
+  .tag.pay-paid {
+    background: var(--a-ok-bg);
+    color: var(--a-ok);
+  }
+  .tag.pay-rejected {
+    background: var(--a-err-bg);
+    color: var(--a-err);
+  }
+  @media (min-width: 720px) {
+    .item {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+    }
+    .tags {
+      justify-content: flex-end;
+    }
+  }
+</style>

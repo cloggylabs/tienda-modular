@@ -159,6 +159,46 @@ p {
   background: var(--color-canvas);
 }
 
+/* Formularios (carrito y checkout) */
+.input {
+  width: 100%;
+  padding: var(--spacing-12) var(--spacing-16);
+  border: 1px solid var(--color-ink);
+  border-radius: var(--radius-inputs);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font: inherit;
+}
+textarea.input {
+  min-height: 90px;
+  resize: vertical;
+}
+.input:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 1px;
+}
+.field {
+  display: grid;
+  gap: var(--spacing-4);
+}
+.field > span {
+  font-weight: var(--font-weight-medium);
+}
+.field small {
+  font-size: var(--text-caption);
+  opacity: 0.8;
+}
+.notice {
+  padding: var(--spacing-12) var(--spacing-16);
+  border: 1px solid var(--color-ink);
+  border-radius: var(--radius-inputs);
+  background: var(--color-surface);
+}
+.notice ul {
+  margin: var(--spacing-4) 0 0;
+  padding-left: var(--spacing-20);
+}
+
 .text-link {
   font-weight: var(--font-weight-medium);
   text-underline-offset: 4px;

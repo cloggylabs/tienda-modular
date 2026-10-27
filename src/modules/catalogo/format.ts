@@ -41,6 +41,17 @@ export function priceLabel(product: Pick<Product, 'price' | 'variants'>): string
   return prices.some((p) => p !== min) ? `Desde ${formatCOP(min)}` : formatCOP(min);
 }
 
+/** Unidades disponibles de un producto o variante; null si es hecho por pedido (sin límite). */
+export function availableUnits(
+  product: Pick<Product, 'availability' | 'stock' | 'variants'>,
+  variant?: ProductVariant,
+): number | null {
+  if (product.availability === 'made_to_order') return null;
+  if (variant) return variant.stock ?? 0;
+  if (product.variants.length) return product.variants.reduce((sum, v) => sum + (v.stock ?? 0), 0);
+  return product.stock ?? 0;
+}
+
 export type StockState = { available: boolean; label: string };
 
 /** Estado de disponibilidad de un producto o de una de sus variantes. */
@@ -48,14 +59,10 @@ export function stockState(
   product: Pick<Product, 'availability' | 'stock' | 'productionDays' | 'variants'>,
   variant?: ProductVariant,
 ): StockState {
-  if (product.availability === 'made_to_order') {
+  const units = availableUnits(product, variant);
+  if (units === null) {
     return { available: true, label: product.productionDays ? `Hecho por pedido · ${product.productionDays}` : 'Hecho por pedido' };
   }
-  const units = variant
-    ? (variant.stock ?? 0)
-    : product.variants.length
-      ? product.variants.reduce((sum, v) => sum + (v.stock ?? 0), 0)
-      : (product.stock ?? 0);
   if (units <= 0) return { available: false, label: 'Agotado' };
   if (units <= 3) return { available: true, label: `¡Últimas ${units} unidades!` };
   return { available: true, label: 'Disponible' };

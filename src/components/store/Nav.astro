@@ -3,11 +3,13 @@ import Icon from './Icon.astro';
 import { instagramUrl, whatsappUrl } from '../../modules/tiendas/settings';
 import { countActiveProducts } from '../../modules/catalogo/repo';
 import { getDb } from '../../lib/db';
+import { cartCount, readCart } from '../../modules/pedidos/cart';
 
 const store = Astro.locals.store!;
 const { settings } = store;
 // «Catálogo» aparece solo cuando hay productos publicados (y si no está ya en el menú).
 const hasCatalog = (await countActiveProducts(getDb(), store.id)) > 0;
+const inCart = cartCount(readCart(Astro.cookies, store.id));
 const links = [
   ...(hasCatalog && !settings.nav.some((l) => l.href.startsWith('/catalogo')) ? [{ label: 'Catálogo', href: '/catalogo' }] : []),
   ...settings.nav,
@@ -38,6 +40,15 @@ const links = [
     <a class="pill" href={whatsappUrl(settings)} target="_blank" rel="noopener" aria-label="WhatsApp">
       <Icon name="whatsapp" size={16} /><span>WhatsApp</span>
     </a>
+    {
+      (hasCatalog || inCart > 0) && (
+        <a class="pill cart" href="/carrito" aria-label={inCart ? `Carrito, ${inCart} productos` : 'Carrito vacío'}>
+          <Icon name="bag" size={16} />
+          <span>Carrito</span>
+          {inCart > 0 && <b class="count">{inCart}</b>}
+        </a>
+      )
+    }
   </div>
 </header>
 
@@ -98,6 +109,15 @@ const links = [
   }
   .pill span {
     display: none;
+  }
+  .count {
+    min-width: 20px;
+    padding: 2px 6px;
+    border-radius: var(--radius-pills);
+    background: var(--color-ink);
+    color: var(--color-canvas);
+    font-size: 12px;
+    text-align: center;
   }
   @media (min-width: 560px) {
     .pill span {

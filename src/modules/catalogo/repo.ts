@@ -39,6 +39,16 @@ export function getActiveProduct(db: Db, storeId: number, slug: string) {
   });
 }
 
+/** Productos publicados por id (para armar el carrito). */
+export function listActiveProductsByIds(db: Db, storeId: number, ids: number[]) {
+  if (!ids.length) return Promise.resolve([]);
+  return db
+    .select()
+    .from(products)
+    .where(and(eq(products.storeId, storeId), eq(products.status, 'active'), inArray(products.id, ids)))
+    .all();
+}
+
 export async function countActiveProducts(db: Db, storeId: number) {
   const row = await db
     .select({ n: sql<number>`count(*)` })

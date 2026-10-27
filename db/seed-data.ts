@@ -37,6 +37,13 @@ export const seedStores: SeedStore[] = [
       legalNotice:
         'Artelicat es un emprendimiento independiente hecho por fans. No está afiliado ni patrocinado por BTS, HYBE ni BIGHIT MUSIC. Todos los diseños son originales.',
       footerNote: 'Hecho en Colombia 💜',
+      // Ejemplo: la dueña cambia destinos, costos y datos de pago en Ajustes generales.
+      transferInstructions: '',
+      shippingZones: [
+        { name: 'Bogotá', price: 8000, cod: true },
+        { name: 'Resto del país', price: 16000, cod: false },
+      ],
+      freeShippingFrom: null,
     },
     theme: ARTELICAT_THEME,
     blocks: [
@@ -137,6 +144,13 @@ export const seedStores: SeedStore[] = [
       legalNotice:
         'Pochi Craft 3D es un emprendimiento independiente hecho por fans. No está afiliado, aprobado ni patrocinado por Mojang Studios ni Microsoft. Minecraft es una marca de sus respectivos dueños. Todos los diseños son originales.',
       footerNote: 'Hecho en Colombia, bloque por bloque',
+      // Ejemplo: la dueña cambia destinos, costos y datos de pago en Ajustes generales.
+      transferInstructions: '',
+      shippingZones: [
+        { name: 'Bogotá', price: 8000, cod: true },
+        { name: 'Resto del país', price: 16000, cod: false },
+      ],
+      freeShippingFrom: null,
     },
     theme: POCHI_THEME,
     blocks: [

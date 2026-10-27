@@ -1,0 +1,390 @@
+---
+import StoreLayout from '../layouts/StoreLayout.astro';
+import Badge from '../components/store/Badge.astro';
+import Icon from '../components/store/Icon.astro';
+import { getDb } from '../lib/db';
+import { formatCOP } from '../modules/catalogo/format';
+import { readCart, resolveCart, toEntries, writeCart } from '../modules/pedidos/cart';
+import { DEPARTMENTS, shippingCost, shippingLabel } from '../modules/pedidos/format';
+import { createOrder } from '../modules/pedidos/repo';
+import { parseCheckoutForm, type CheckoutValues } from '../modules/pedidos/validate';
+import { checkoutConfig, whatsappUrl } from '../modules/tiendas/settings';
+
+const db = getDb();
+const store = Astro.locals.store!;
+const secure = Astro.url.protocol === 'https:';
+Astro.response.headers.set('Cache-Control', 'no-store');
+Astro.response.headers.set('X-Robots-Tag', 'noindex');
+
+const config = checkoutConfig(store.settings);
+const cart = await resolveCart(db, store.id, readCart(Astro.cookies, store.id));
+if (!cart.lines.length) return Astro.redirect('/carrito');
+
+let errors: string[] = [];
+let values: CheckoutValues = {
+  customerName: '',
+  phone: '',
+  email: '',
+  department: '',
+  city: '',
+  address: '',
+  notes: '',
+  zone: config.zones.length === 1 ? config.zones[0]!.name : '',
+  paymentMethod: config.acceptsTransfer ? 'transfer' : 'cod',
+};
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  // Campo trampa: las personas no lo ven; los robots que llenan todo, sí.
+  if (String(form.get('sitio') ?? '')) return Astro.redirect('/carrito');
+
+  const result = parseCheckoutForm(form, config, cart.subtotal);
+  if (cart.changed) {
+    // Algo cambió desde que armó el carrito (precio, stock): se corrige y se le muestra antes de crear el pedido.
+    writeCart(Astro.cookies, store.id, toEntries(cart.lines), secure);
+    errors = [...cart.notices, 'Revisa el resumen antes de confirmar.'];
+    if (!cart.lines.length) return Astro.redirect('/carrito');
+  }
+  if (!result.ok) {
+    errors.push(...result.errors);
+    values = result.values;
+  } else if (!errors.length) {
+    const token = await createOrder(db, store.id, result.data, cart.lines, cart.subtotal);
+    writeCart(Astro.cookies, store.id, [], secure);
+    return Astro.redirect(`/pedido/${token}`);
+  } else {
+    values = { ...values, ...Object.fromEntries([...form].map(([k, v]) => [k, String(v)])) };
+  }
+}
+
+const zones = config.zones.map((z) => ({ ...z, cost: shippingCost(z, cart.subtotal, config.freeShippingFrom) }));
+const selectedZone = zones.find((z) => z.name === values.zone);
+const canPay = config.acceptsTransfer || (config.acceptsCod && zones.some((z) => z.cod));
+const anyCod = config.acceptsCod && zones.some((z) => z.cod);
+---
+
+<StoreLayout title={`Finalizar compra — ${store.name}`}>
+  <section class="band head">
+    <Badge>{store.name}</Badge>
+    <h1 class="heading">Finalizar compra</h1>
+  </section>
+
+  <section class="band checkout">
+    {
+      errors.length > 0 && (
+        <div class="notice" role="alert">
+          <strong>Revisa estos datos:</strong>
+          <ul>
+            {errors.map((e) => (
+              <li>{e}</li>
+            ))}
+          </ul>
+        </div>
+      )
+    }
+
+    {
+      !canPay ? (
+        <div class="notice">
+          <p>Por ahora terminamos los pedidos por WhatsApp.</p>
+          <a class="btn btn-primary" href={whatsappUrl(store.settings)} target="_blank" rel="noopener">
+            <Icon name="whatsapp" /> Escribir por WhatsApp
+          </a>
+        </div>
+      ) : (
+        <form method="post" class="layout" id="checkout">
+          <div class="fields">
+            <fieldset>
+              <legend class="heading-sm">Tus datos</legend>
+              <label class="field">
+                <span>Nombre completo</span>
+                <input class="input" name="customerName" value={values.customerName} required autocomplete="name" maxlength="120" />
+              </label>
+              <div class="pair">
+                <label class="field">
+                  <span>Celular (WhatsApp)</span>
+                  <input class="input" name="phone" value={values.phone} required type="tel" inputmode="tel" autocomplete="tel-national" placeholder="300 123 4567" />
+                </label>
+                <label class="field">
+                  <span>Correo (opcional)</span>
+                  <input class="input" name="email" value={values.email} type="email" autocomplete="email" maxlength="120" />
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend class="heading-sm">Envío</legend>
+              <label class="field">
+                <span>Destino</span>
+                <select class="input" name="zone" required data-zone>
+                  <option value="" disabled selected={!selectedZone}>
+                    Elige el destino
+                  </option>
+                  {zones.map((z) => (
+                    <option value={z.name} selected={z === selectedZone} data-cost={z.cost ?? ''} data-cod={String(config.acceptsCod && z.cod)}>
+                      {z.name} — {shippingLabel(z.cost)}
+                    </option>
+                  ))}
+                </select>
+                {zones.some((z) => z.cost === null) && <small>«Por confirmar»: te decimos el valor del envío por WhatsApp antes de despachar.</small>}
+              </label>
+              <div class="pair">
+                <label class="field">
+                  <span>Departamento</span>
+                  <select class="input" name="department" required autocomplete="address-level1">
+                    <option value="" disabled selected={!values.department}>
+                      Elige
+                    </option>
+                    {DEPARTMENTS.map((d) => (
+                      <option selected={d === values.department}>{d}</option>
+                    ))}
+                  </select>
+                </label>
+                <label class="field">
+                  <span>Ciudad o municipio</span>
+                  <input class="input" name="city" value={values.city} required autocomplete="address-level2" maxlength="80" />
+                </label>
+              </div>
+              <label class="field">
+                <span>Dirección</span>
+                <input class="input" name="address" value={values.address} required autocomplete="street-address" maxlength="200" placeholder="Calle 00 # 00-00, apto, barrio" />
+              </label>
+              <label class="field">
+                <span>Notas (opcional)</span>
+                <textarea class="input" name="notes" maxlength="500" placeholder="Indicaciones para la entrega, horarios…">{values.notes}</textarea>
+              </label>
+            </fieldset>
+
+            <fieldset class="payment">
+              <legend class="heading-sm">Pago</legend>
+              {
+                config.acceptsTransfer && (
+                  <label class="option">
+                    <input type="radio" name="paymentMethod" value="transfer" checked={values.paymentMethod === 'transfer'} />
+                    <span>
+                      <strong>{config.transferLabel}</strong>
+                      <small>Al confirmar te mostramos los datos para pagar y subes el comprobante.</small>
+                    </span>
+                  </label>
+                )
+              }
+              {
+                anyCod && (
+                  <label class="option" data-cod-option>
+                    <input type="radio" name="paymentMethod" value="cod" checked={values.paymentMethod === 'cod'} />
+                    <span>
+                      <strong>Efectivo contra entrega</strong>
+                      <small data-cod-note>
+                        Pagas cuando recibes. Solo en: {zones.filter((z) => z.cod).map((z) => z.name).join(', ')}.
+                      </small>
+                    </span>
+                  </label>
+                )
+              }
+            </fieldset>
+
+            <label class="trap" aria-hidden="true">
+              Sitio web <input name="sitio" tabindex="-1" autocomplete="off" />
+            </label>
+          </div>
+
+          <aside class="summary">
+            <h2 class="heading-sm">Resumen</h2>
+            <ul>
+              {cart.lines.map((l) => (
+                <li>
+                  <span>
+                    {l.quantity} × {l.product.name}
+                    {l.variant && <small> · {l.variant.name}</small>}
+                  </span>
+                  <span>{formatCOP(l.total)}</span>
+                </li>
+              ))}
+            </ul>
+            <p class="row">
+              <span>Subtotal</span>
+              <span>{formatCOP(cart.subtotal)}</span>
+            </p>
+            <p class="row">
+              <span>Envío</span>
+              <span data-shipping>{selectedZone ? shippingLabel(selectedZone.cost) : 'Elige el destino'}</span>
+            </p>
+            <p class="row total">
+              <span>Total</span>
+              <strong data-total data-subtotal={cart.subtotal}>
+                {formatCOP(cart.subtotal + (selectedZone?.cost ?? 0))}
+              </strong>
+            </p>
+            <button class="btn btn-primary" type="submit" data-submit>
+              Confirmar pedido
+            </button>
+            <a class="text-link" href="/carrito">
+              Volver al carrito
+            </a>
+          </aside>
+        </form>
+      )
+    }
+  </section>
+</StoreLayout>
+
+<script>
+  // Mejora progresiva: el servidor valida todo; esto solo actualiza el resumen y el contra entrega.
+  const form = document.getElementById('checkout') as HTMLFormElement | null;
+  // Sin HTMLSelectElement: sus tipos chocan con los de Workers. Se lee la opción elegida con :checked.
+  const zone = form?.querySelector<HTMLElement>('[data-zone]');
+  const shipping = form?.querySelector<HTMLElement>('[data-shipping]');
+  const total = form?.querySelector<HTMLElement>('[data-total]');
+  const codOption = form?.querySelector<HTMLElement>('[data-cod-option]');
+  const cop = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
+
+  function update() {
+    if (!zone || !shipping || !total) return;
+    const option = zone.querySelector<HTMLOptionElement>('option:checked');
+    if (!option || !option.value) return;
+    const raw = option.dataset.cost ?? '';
+    const cost = raw === '' ? null : Number(raw);
+    shipping.textContent = cost === null ? 'Por confirmar' : cost === 0 ? 'Gratis' : cop.format(cost);
+    total.textContent = cop.format(Number(total.dataset.subtotal) + (cost ?? 0));
+    if (codOption) {
+      const cod = option.dataset.cod === 'true';
+      const radio = codOption.querySelector<HTMLInputElement>('input')!;
+      radio.disabled = !cod;
+      codOption.classList.toggle('off', !cod);
+      if (!cod && radio.checked) {
+        radio.checked = false;
+        const other = form!.querySelector<HTMLInputElement>('input[name=paymentMethod]:not([value=cod])');
+        if (other) other.checked = true;
+      }
+    }
+  }
+  zone?.addEventListener('change', update);
+  update();
+
+  form?.addEventListener('submit', () => {
+    const button = form.querySelector<HTMLButtonElement>('[data-submit]');
+    if (button) {
+      // Evita pedidos dobles si tocan el botón dos veces.
+      setTimeout(() => (button.disabled = true));
+      button.textContent = 'Enviando…';
+    }
+  });
+</script>
+
+<style>
+  .head {
+    display: grid;
+    justify-items: center;
+    gap: var(--spacing-16);
+    padding-bottom: var(--spacing-24);
+    text-align: center;
+  }
+  .checkout {
+    display: grid;
+    gap: var(--spacing-24);
+    padding-top: var(--spacing-24);
+  }
+  .layout {
+    display: grid;
+    gap: var(--spacing-36);
+    align-items: start;
+  }
+  .fields {
+    display: grid;
+    gap: var(--spacing-36);
+  }
+  fieldset {
+    display: grid;
+    gap: var(--spacing-16);
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  legend {
+    margin-bottom: var(--spacing-16);
+    padding: 0;
+  }
+  .pair {
+    display: grid;
+    gap: var(--spacing-16);
+  }
+  .option {
+    display: flex;
+    gap: var(--spacing-12);
+    align-items: flex-start;
+    padding: var(--spacing-16);
+    border: 1px solid var(--color-ink);
+    border-radius: var(--radius-inputs);
+    cursor: pointer;
+  }
+  .option:has(input:checked) {
+    background: var(--color-surface);
+  }
+  .option input {
+    margin-top: 5px;
+    accent-color: var(--color-ink);
+  }
+  .option span {
+    display: grid;
+    gap: var(--spacing-4);
+  }
+  .option small {
+    font-size: var(--text-caption);
+  }
+  .option.off {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .trap {
+    position: absolute;
+    left: -9999px;
+  }
+  .summary {
+    display: grid;
+    gap: var(--spacing-12);
+    padding: var(--spacing-24);
+    border: 1px solid var(--color-ink);
+    border-radius: var(--radius-images);
+    background: var(--color-surface);
+  }
+  .summary ul {
+    display: grid;
+    gap: var(--spacing-8);
+    margin: 0 0 var(--spacing-8);
+    padding: 0 0 var(--spacing-12);
+    list-style: none;
+    border-bottom: 1px solid var(--color-ink);
+  }
+  .summary li,
+  .row {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--spacing-12);
+  }
+  .summary small {
+    font-size: var(--text-caption);
+  }
+  .total {
+    padding-top: var(--spacing-8);
+    font-size: var(--text-subheading);
+  }
+  .summary .text-link {
+    justify-self: center;
+  }
+  @media (min-width: 640px) {
+    .pair {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  @media (min-width: 900px) {
+    .layout {
+      grid-template-columns: minmax(0, 1fr) 360px;
+      gap: var(--spacing-60);
+    }
+    .summary {
+      position: sticky;
+      top: var(--spacing-24);
+    }
+  }
+</style>
