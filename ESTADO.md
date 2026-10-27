@@ -7,6 +7,7 @@
 - **Fase 1:** base multi-tienda (Artelicat y Pochi Craft 3D), tema por tienda, panel con acceso, ajustes generales y editor de tema.
 - **Fase 2:** editor de bloques de contenido y biblioteca de fotos en R2.
 - **Fase 3:** catálogo con productos, variantes, categorías, colecciones por temporada y bloque «Productos» para el inicio.
+- **Fase 4:** carrito, checkout, pedidos y comprobantes de pago (ver README → «Carrito y pedidos»). Publicada el 27 de octubre de 2026.
 
 En producción (Cloudflare, plan gratuito):
 
@@ -14,12 +15,9 @@ En producción (Cloudflare, plan gratuito):
 - Pochi Craft 3D: https://pochi-craft-3d.tienda-modular.workers.dev
 - Panel: `/admin` en cualquiera de las dos (una sola cuenta para ambas tiendas).
 - Base D1 `tienda-modular` (región ENAM), bucket R2 `tienda-modular-media`.
-- Migraciones aplicadas en producción: 0000_inicial, 0001_fotos, 0002_catalogo.
+- Migraciones aplicadas en producción: 0000_inicial, 0001_fotos, 0002_catalogo, 0003_pedidos.
+- **Productos de prueba en producción** (publicados, con «(prueba)» en el nombre y dirección `prueba-…`): 4 en Artelicat y 3 en Pochi. Cubren variantes con precio propio, stock bajo, agotado, hecho por pedido y oferta. La dueña los edita o elimina cuando cargue los reales.
 - `SETUP_TOKEN` configurado en el worker `artelicat` por la dueña; la cuenta del panel ya existe.
-
-## Hecho, sin publicar todavía
-
-- **Fase 4:** carrito, checkout, pedidos y comprobantes (ver README → «Carrito y pedidos»). Migración nueva `0003_pedidos` (aplicada solo en local). Se publica con `npm run deploy`.
 
 ## Decisiones tomadas
 
@@ -48,7 +46,7 @@ En producción (Cloudflare, plan gratuito):
 
 ## Pendiente de la dueña (Fase 4)
 
-- Después de publicar: en *Ajustes generales* de cada tienda, llenar **Datos para Bre-B o transferencia** y los **destinos de envío** (sin destinos, todo sale «Envío a todo Colombia», costo por confirmar y sin contra entrega).
+- En *Ajustes generales* de cada tienda, llenar **Datos para Bre-B o transferencia** y los **destinos de envío** (sin destinos, todo sale «Envío a todo Colombia», costo por confirmar y sin contra entrega).
 
 ## Siguiente: Fase 5 — envíos y stock
 
