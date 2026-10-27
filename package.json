@@ -18,7 +18,7 @@
     "db:seed:build": "node scripts/build-seed.ts",
     "deploy:artelicat": "astro build && wrangler deploy",
     "deploy:pochi": "CLOUDFLARE_ENV=pochi astro build && wrangler deploy",
-    "deploy": "npm run deploy:artelicat && npm run deploy:pochi"
+    "deploy": "npm run db:migrate:remote && npm run deploy:artelicat && npm run deploy:pochi"
   },
   "dependencies": {
     "@astrojs/cloudflare": "^14.4.2",

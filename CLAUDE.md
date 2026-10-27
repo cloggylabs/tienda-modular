@@ -24,4 +24,5 @@ Ecommerce multi-tienda (Artelicat y Pochi Craft 3D) en Astro 7 + Cloudflare Work
 
 ## Comandos
 - `npm run dev` · `npm run build` (incluye `astro check`) · `npm run db:reset:local`
+- Publicar: `npm run deploy` (aplica las migraciones remotas primero y se detiene si fallan; no filtrar su salida con tuberías que oculten el código de salida)
 - Vista previa de otra tienda en local: `/?tienda=pochi-craft-3d`

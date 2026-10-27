@@ -96,7 +96,7 @@ npm run db:migrate:remote
 npm run db:seed:remote
 npx wrangler secret put SETUP_TOKEN                 # worker de Artelicat
 npx wrangler secret put SETUP_TOKEN --env pochi     # worker de Pochi Craft 3D
-npm run deploy                                       # publica los dos workers
+npm run deploy                                       # aplica migraciones y publica los dos workers
 ```
 
 Luego abre `https://artelicat.<tu-subdominio>.workers.dev/admin/setup?token=<SETUP_TOKEN>` para crear tu cuenta. La cuenta sirve para ambas tiendas.
