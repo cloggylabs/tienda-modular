@@ -57,6 +57,11 @@ En producción (Cloudflare, plan gratuito):
 - Stock: se descuenta al confirmar y se devuelve al cancelar (`order_items.stock_taken`, `orders.stock_applied`). Aviso antes de confirmar si no alcanza.
 - Migración 0005_envios_stock.
 
+## Correcciones del 19 de noviembre de 2026
+
+- Comprobante de pago en el panel: se abre en un visor con Descargar, Abrir en pestaña nueva y cerrar (×, Esc o tocando fuera).
+- Checkout en celular: los desplegables (destino y departamento) se ven del mismo alto que los demás campos en iPhone, y la nota «Por confirmar» ya no abre el selector al tocarla.
+
 ## Siguiente
 
 - Personalización de productos (texto, color, nombre en la pieza).

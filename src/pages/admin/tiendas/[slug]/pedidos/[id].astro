@@ -239,15 +239,39 @@ const hasShipping = order.status === 'shipped' || order.status === 'delivered';
         {order.receiptKey ? (
           <>
             <p class="muted">Subido el {formatDateTime(order.receiptAt!)}</p>
+            {/* Sin JavaScript, el enlace abre el comprobante en otra pestaña; con JavaScript, en el visor. */}
             {isPdf ? (
-              <a class="button secondary" href={receipt} target="_blank" rel="noopener">
-                Abrir PDF ↗
+              <a class="button secondary" href={receipt} target="_blank" rel="noopener" data-open-receipt>
+                Ver PDF
               </a>
             ) : (
-              <a href={receipt} target="_blank" rel="noopener" class="receipt">
+              <a href={receipt} target="_blank" rel="noopener" class="receipt" data-open-receipt title="Ver comprobante en grande">
                 <img src={receipt} alt={`Comprobante del pedido ${orderCode(order)}`} />
               </a>
             )}
+            <dialog class="viewer" id="receipt-viewer" aria-labelledby="receipt-viewer-title">
+              <div class="viewer-bar">
+                <strong id="receipt-viewer-title">Comprobante {orderCode(order)}</strong>
+                <div class="viewer-actions">
+                  <a class="button secondary" href={`${receipt}?descargar=1`} download>
+                    Descargar
+                  </a>
+                  <a class="button secondary" href={receipt} target="_blank" rel="noopener">
+                    Abrir en pestaña nueva ↗
+                  </a>
+                </div>
+                <button class="viewer-close" type="button" data-close-receipt aria-label="Cerrar" title="Cerrar (Esc)" autofocus>
+                  ×
+                </button>
+              </div>
+              <div class="viewer-body">
+                {isPdf ? (
+                  <iframe data-src={receipt} title={`Comprobante del pedido ${orderCode(order)}`} />
+                ) : (
+                  <img src={receipt} alt={`Comprobante del pedido ${orderCode(order)}`} />
+                )}
+              </div>
+            </dialog>
           </>
         ) : (
           <p class="muted">La clienta todavía no ha subido el comprobante.</p>
@@ -341,6 +365,27 @@ const hasShipping = order.status === 'shipped' || order.status === 'delivered';
 </AdminLayout>
 
 <script>
+  // Visor del comprobante: se cierra con «Cerrar», con Esc o tocando fuera de él.
+  type Viewer = HTMLElement & { showModal(): void; close(): void; open: boolean };
+  const viewer = document.getElementById('receipt-viewer') as Viewer | null;
+  if (viewer) {
+    document.querySelectorAll<HTMLAnchorElement>('[data-open-receipt]').forEach((link) =>
+      link.addEventListener('click', (event) => {
+        if (event.metaKey || event.ctrlKey || event.shiftKey) return; // abrir en otra pestaña a propósito
+        event.preventDefault();
+        // El PDF se carga solo cuando se abre el visor.
+        const frame = viewer.querySelector<HTMLIFrameElement>('iframe[data-src]');
+        if (frame && !frame.src) frame.src = frame.dataset.src!;
+        viewer.showModal();
+      }),
+    );
+    viewer.querySelector('[data-close-receipt]')?.addEventListener('click', () => viewer.close());
+    // El visor no tiene relleno propio: un clic cuyo destino es el <dialog> cayó en el fondo oscuro.
+    viewer.addEventListener('click', (event) => {
+      if (event.target === viewer) viewer.close();
+    });
+  }
+
   document.querySelectorAll<HTMLButtonElement>('[data-confirm]').forEach((button) =>
     button.addEventListener('click', (event) => {
       if (!confirm(button.dataset.confirm!)) event.preventDefault();
@@ -503,6 +548,96 @@ const hasShipping = order.status === 'shipped' || order.status === 'delivered';
   .button.danger {
     border-color: var(--a-err);
     color: var(--a-err);
+  }
+  .receipt {
+    display: inline-block;
+    cursor: zoom-in;
+  }
+  .viewer {
+    width: min(96vw, 1100px);
+    max-width: none;
+    height: min(94dvh, 1400px);
+    max-height: none;
+    padding: 0;
+    border: 0;
+    border-radius: var(--a-radius);
+    background: var(--a-panel);
+    color: var(--a-ink);
+  }
+  .viewer[open] {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .viewer::backdrop {
+    background: rgb(0 0 0 / 0.75);
+  }
+  :global(body:has(.viewer[open])) {
+    overflow: hidden;
+  }
+  .viewer-bar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'title close' 'actions actions';
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px 12px 14px;
+    border-bottom: 1px solid var(--a-line);
+  }
+  .viewer-bar strong {
+    grid-area: title;
+  }
+  .viewer-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    grid-area: actions;
+  }
+  .viewer-actions .button {
+    padding: 6px 12px;
+    font-size: 14px;
+  }
+  .viewer-close {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 1px solid var(--a-line);
+    border-radius: 50%;
+    background: var(--a-panel);
+    color: var(--a-ink);
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    grid-area: close;
+  }
+  .viewer-close:hover {
+    background: var(--a-bg);
+  }
+  @media (min-width: 720px) {
+    .viewer-bar {
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      grid-template-areas: 'title actions close';
+      padding-bottom: 10px;
+    }
+  }
+  /* El comprobante se ve completo, ajustado al visor (suelen ser capturas altas del celular). */
+  .viewer-body {
+    position: relative;
+    min-height: 0;
+    background: var(--a-bg);
+  }
+  .viewer-body img,
+  .viewer-body iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+  }
+  .viewer-body img {
+    padding: 12px;
+    object-fit: contain;
   }
   .receipt img {
     max-width: min(100%, 420px);

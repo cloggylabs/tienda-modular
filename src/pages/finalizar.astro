@@ -114,9 +114,9 @@ const anyCod = config.acceptsCod && zones.some((z) => z.cod);
 
             <fieldset>
               <legend class="heading-sm">Envío</legend>
-              <label class="field">
-                <span>Destino</span>
-                <select class="input" name="zone" required data-zone>
+              <div class="field">
+                <label for="zone">Destino</label>
+                <select class="input" id="zone" name="zone" required data-zone aria-describedby={zones.some((z) => z.cost === null) ? 'zone-hint' : undefined}>
                   <option value="" disabled selected={!selectedZone}>
                     Elige el destino
                   </option>
@@ -126,8 +126,9 @@ const anyCod = config.acceptsCod && zones.some((z) => z.cod);
                     </option>
                   ))}
                 </select>
-                {zones.some((z) => z.cost === null) && <small>«Por confirmar»: te decimos el valor del envío por WhatsApp antes de despachar.</small>}
-              </label>
+                {/* La nota va fuera del <label>: dentro, tocarla en el celular abría el selector. */}
+                {zones.some((z) => z.cost === null) && <small id="zone-hint">«Por confirmar»: te decimos el valor del envío por WhatsApp antes de despachar.</small>}
+              </div>
               <div class="pair">
                 <label class="field">
                   <span>Departamento</span>

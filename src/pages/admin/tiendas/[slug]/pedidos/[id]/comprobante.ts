@@ -1,10 +1,11 @@
 // Muestra el comprobante de pago de un pedido. Solo desde el panel (el middleware exige sesión).
+// Con ?descargar=1 el navegador lo guarda en vez de mostrarlo.
 import type { APIRoute } from 'astro';
 import { getDb } from '../../../../../../lib/db';
 import { getStoreBySlug } from '../../../../../../modules/tiendas/repo';
 import { getOrder, getReceipt } from '../../../../../../modules/pedidos/repo';
 
-export const GET: APIRoute = async ({ params }) => {
+export const GET: APIRoute = async ({ params, url }) => {
   const db = getDb();
   const store = await getStoreBySlug(db, params.slug ?? '');
   const id = Number(params.id);
@@ -16,7 +17,7 @@ export const GET: APIRoute = async ({ params }) => {
   return new Response(object.body, {
     headers: {
       'Content-Type': order.receiptType ?? 'application/octet-stream',
-      'Content-Disposition': `inline; filename="comprobante-${order.number}.${ext}"`,
+      'Content-Disposition': `${url.searchParams.has('descargar') ? 'attachment' : 'inline'}; filename="comprobante-${order.number}.${ext}"`,
       'Cache-Control': 'private, no-store',
       'X-Content-Type-Options': 'nosniff',
     },
