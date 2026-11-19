@@ -78,6 +78,7 @@ const lead =
             ? 'Paga con los datos de abajo y sube el comprobante aquí mismo.'
             : 'Te escribimos por WhatsApp para confirmar la entrega. Pagas en efectivo cuando lo recibas.';
 const accept = Object.keys(RECEIPT_TYPES).join(',');
+const showShipping = (order.status === 'shipped' || order.status === 'delivered') && Boolean(order.carrier);
 ---
 
 <StoreLayout title={`Pedido ${orderCode(order)} — ${store.name}`}>
@@ -94,6 +95,32 @@ const accept = Object.keys(RECEIPT_TYPES).join(',');
         <h2 class="heading-sm">Seguimiento</h2>
         <OrderTimeline steps={steps} />
       </article>
+
+      {
+        showShipping && (
+          <article class="box shipping">
+            <h2 class="heading-sm">Envío</h2>
+            <dl class="ship-data">
+              <dt>Transportadora</dt>
+              <dd>{order.carrier}</dd>
+              {order.trackingNumber && (
+                <>
+                  <dt>Número de guía</dt>
+                  <dd class="guide">
+                    <strong id="guia">{order.trackingNumber}</strong>
+                    <button type="button" class="btn btn-ghost copy" data-copy={order.trackingNumber}>
+                      Copiar
+                    </button>
+                  </dd>
+                </>
+              )}
+            </dl>
+            {order.trackingNumber && order.status === 'shipped' && !/mensajero/i.test(order.carrier) && (
+              <p class="small">Con este número puedes rastrear el envío en la página de {order.carrier}.</p>
+            )}
+          </article>
+        )
+      }
 
       {
         needsPayment && (
@@ -189,6 +216,20 @@ const accept = Object.keys(RECEIPT_TYPES).join(',');
 </StoreLayout>
 
 <script>
+  // Copiar el número de guía.
+  document.querySelectorAll<HTMLButtonElement>('button[data-copy]').forEach((button) =>
+    button.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(button.dataset.copy ?? '');
+        const label = button.textContent;
+        button.textContent = '¡Copiado!';
+        setTimeout(() => (button.textContent = label), 2000);
+      } catch {
+        // Sin portapapeles: el número sigue visible para copiarlo a mano.
+      }
+    }),
+  );
+
   // Fotos muy pesadas (fotos de cámara): se reducen en el navegador antes de enviarlas.
   const MAX_BYTES = 4 * 1024 * 1024;
   const MAX_SIDE = 2000;
@@ -271,6 +312,25 @@ const accept = Object.keys(RECEIPT_TYPES).join(',');
   }
   .small {
     font-size: var(--text-caption);
+  }
+  .ship-data {
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .ship-data dt:first-child {
+    margin-top: 0;
+  }
+  .guide {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--spacing-12);
+  }
+  .guide strong {
+    font-size: var(--text-subheading);
+    letter-spacing: 0.04em;
+    overflow-wrap: anywhere;
   }
   .summary {
     gap: var(--spacing-12);

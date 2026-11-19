@@ -24,7 +24,7 @@ npm run dev                       # http://localhost:4321
 
 ## Cómo se decide qué tienda mostrar
 
-1. **Vista previa** `?tienda=<slug>`: solo en desarrollo o con sesión iniciada en el panel.
+1. **Vista previa** `?tienda=<slug>`: solo en desarrollo o con sesión iniciada en el panel. En producción, si la tienda pedida tiene su propia dirección (dominio o `*.workers.dev`), redirige allá; por eso el panel arma sus enlaces con `storeLinker()` y nunca con `?tienda=`.
 2. **Dominio**: el hostname se busca en la tabla `store_domains` (se edita en *Ajustes generales → Dominios*).
 3. **Tienda por defecto del worker** (`DEFAULT_STORE` en `wrangler.jsonc`).
 
@@ -81,10 +81,13 @@ El panel arma el formulario solo a partir de esa lista de campos.
 - **Envíos** (*Ajustes generales → Envíos*): hasta 8 destinos con su costo (vacío = «por confirmar» por WhatsApp) y si admiten **contra entrega**. Opcional: envío gratis desde cierto subtotal. Sin destinos guardados se ofrece «Envío a todo Colombia» por confirmar y sin contra entrega.
 - **Bre-B / transferencia:** al confirmar, la página del pedido muestra el valor y los *Datos para Bre-B o transferencia* de los ajustes, y la clienta sube el comprobante (foto o PDF, máx. 5 MB). Los comprobantes van a R2 bajo `comprobantes/` y solo se ven desde el panel.
 - **Estados del pedido:** Recibido → Confirmado → En preparación → En camino → Entregado, o Cancelado en cualquier punto antes de entregarse. Cada cambio queda en el historial (`order_events`) con su fecha, y de ahí sale la línea de tiempo. Al entregar un pedido contra entrega, el pago queda como recibido.
-- **Página del pedido** (`/pedido/<clave>`): enlace secreto y no indexado; muestra la línea de tiempo y un botón de WhatsApp con el resumen.
+- **Página del pedido** (`/pedido/<clave>`): enlace secreto y no indexado; muestra la línea de tiempo, la transportadora y el número de guía (con botón para copiarlo) cuando va en camino, y un botón de WhatsApp con el resumen.
 - **Panel → Pedidos:** lista con filtros por estado y búsqueda, contador de pedidos por atender (Recibido), detalle con línea de tiempo y comprobante; confirmar o rechazar el pago, avanzar de estado, cancelar o reabrir y nota interna.
 - En el formulario de productos y colecciones, el ícono de enlace junto a la dirección copia la URL pública completa de la tienda que corresponde.
-- Los pedidos copian nombre, opción, precio y foto de cada producto: no cambian si después se edita el catálogo. El stock todavía no se descuenta (Fase 5).
+- Los pedidos copian nombre, opción, precio y foto de cada producto: no cambian si después se edita el catálogo.
+- **Envío:** al marcar «En camino» se piden la transportadora (con sugerencias: Servientrega, Interrapidísimo, Coordinadora…) y el número de guía, opcional para un mensajero propio. Se pueden corregir después en la tarjeta *Envío* del pedido.
+- **Avisos a la clienta:** sin dominio propio no hay correo automático, así que después de cada cambio de estado el panel muestra «Avisarle por WhatsApp» con un mensaje listo para ese estado (`customerUpdateMessage()`): confirmado, en preparación, en camino con transportadora y guía (y el valor a pagar si es contra entrega), entregado, cancelado o comprobante rechazado. El botón «Escribirle por WhatsApp» lleva siempre el mensaje del estado actual.
+- **Stock:** al confirmar el pedido se descuenta de los productos con stock (de la variante si la tiene) y al cancelarlo se devuelve; los hechos por pedido no se tocan. Cada línea guarda en `stock_taken` cuánto se descontó: si no alcanzaba se toma lo que haya (nunca queda negativo) y al cancelar se devuelve exactamente eso. Antes de confirmar, el pedido avisa si el stock de hoy no alcanza. Todo pasa en el mismo `db.batch` que el cambio de estado, y `orders.stock_applied` evita descontar dos veces (doble clic, reabrir y volver a confirmar). Los pedidos confirmados antes de la Fase 5 no descontaron stock y al cancelarlos no devuelven nada.
 
 ## Fotos
 
@@ -128,5 +131,5 @@ Luego abre `https://artelicat.<tu-subdominio>.workers.dev/admin/setup?token=<SET
 - [x] Fase 2: editor de bloques de contenido y biblioteca de fotos en R2
 - [x] Fase 3: catálogo con productos, variantes, categorías y colecciones por temporada
 - [x] Fase 4: carrito y checkout con Bre-B/transferencia (comprobante) y contra entrega
-- [ ] Fase 5: pedidos, envíos y stock
+- [x] Fase 5: transportadora y guía, avisos a la clienta por WhatsApp y descuento de stock
 - [ ] Después: personalización de productos y pasarela en línea

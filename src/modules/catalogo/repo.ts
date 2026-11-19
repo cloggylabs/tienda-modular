@@ -223,6 +223,16 @@ export function listProductsAdmin(db: Db, storeId: number, opts: { q?: string; s
     .all();
 }
 
+/** Productos por id en cualquier estado (panel: revisar el stock de un pedido). */
+export function listProductsByIds(db: Db, storeId: number, ids: number[]) {
+  if (!ids.length) return Promise.resolve([]);
+  return db
+    .select()
+    .from(products)
+    .where(and(eq(products.storeId, storeId), inArray(products.id, ids)))
+    .all();
+}
+
 export function getProduct(db: Db, storeId: number, id: number) {
   return db.query.products.findFirst({ where: and(eq(products.id, id), eq(products.storeId, storeId)) });
 }

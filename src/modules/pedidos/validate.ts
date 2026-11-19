@@ -97,3 +97,26 @@ export function parseCheckoutForm(form: FormData, config: CheckoutConfig, subtot
     },
   };
 }
+
+export const CARRIER_MAX = 60;
+export const TRACKING_MAX = 40;
+const TRACKING = /^[\p{L}\p{N}][\p{L}\p{N} .\/-]*$/u;
+
+export interface ShippingValues {
+  carrier: string;
+  trackingNumber: string;
+}
+
+/** Transportadora (obligatoria) y número de guía (opcional: un mensajero propio no tiene). */
+export function parseShippingForm(form: FormData): { values: ShippingValues; errors: string[] } {
+  const clean = (key: string) => String(form.get(key) ?? '').replace(/\s+/g, ' ').trim();
+  const values = { carrier: clean('carrier'), trackingNumber: clean('trackingNumber') };
+  const errors: string[] = [];
+  if (!values.carrier) errors.push('Escribe la transportadora (o «Mensajero propio»).');
+  else if (values.carrier.length > CARRIER_MAX) errors.push(`La transportadora puede tener hasta ${CARRIER_MAX} caracteres.`);
+  if (values.trackingNumber.length > TRACKING_MAX) errors.push(`El número de guía puede tener hasta ${TRACKING_MAX} caracteres.`);
+  else if (values.trackingNumber && !TRACKING.test(values.trackingNumber)) {
+    errors.push('El número de guía solo puede tener letras, números, espacios y guiones.');
+  }
+  return { values, errors };
+}

@@ -17,7 +17,7 @@ En producción (Cloudflare, plan gratuito):
 - Pochi Craft 3D: https://pochi-craft-3d.tienda-modular.workers.dev
 - Panel: `/admin` en cualquiera de las dos (una sola cuenta para ambas tiendas).
 - Base D1 `tienda-modular` (región ENAM), bucket R2 `tienda-modular-media`.
-- Migraciones aplicadas en producción: 0000_inicial, 0001_fotos, 0002_catalogo, 0003_pedidos, 0004_historial_pedidos.
+- Migraciones aplicadas en producción: 0000_inicial, 0001_fotos, 0002_catalogo, 0003_pedidos, 0004_historial_pedidos, 0005_envios_stock.
 - **Productos de prueba en producción** (publicados, con «(prueba)» en el nombre y dirección `prueba-…`): 4 en Artelicat y 3 en Pochi. Cubren variantes con precio propio, stock bajo, agotado, hecho por pedido y oferta. La dueña los edita o elimina cuando cargue los reales.
 - `SETUP_TOKEN` configurado en el worker `artelicat` por la dueña; la cuenta del panel ya existe.
 
@@ -50,11 +50,18 @@ En producción (Cloudflare, plan gratuito):
 
 - En *Ajustes generales* de cada tienda, llenar **Datos para Bre-B o transferencia** y los **destinos de envío** (sin destinos, todo sale «Envío a todo Colombia», costo por confirmar y sin contra entrega).
 
-## Siguiente: Fase 5 — envíos y stock
+## Fase 5 — envíos y stock (PR abierto, publicado el 18 de noviembre de 2026)
 
-- Transportadora y número de guía al marcar «En camino», y avisos a la clienta en cada cambio de estado.
-- Descontar stock al confirmar (y devolverlo al cancelar).
-- Después: personalización de productos y pasarela en línea (Wompi).
+- Transportadora y número de guía al marcar «En camino» (editables después); la clienta los ve en la página de su pedido.
+- Avisos a la clienta: botón «Avisarle por WhatsApp» con mensaje listo después de cada cambio de estado (no hay correo sin dominio propio).
+- Stock: se descuenta al confirmar y se devuelve al cancelar (`order_items.stock_taken`, `orders.stock_applied`). Aviso antes de confirmar si no alcanza.
+- Migración 0005_envios_stock.
+
+## Siguiente
+
+- Personalización de productos (texto, color, nombre en la pieza).
+- Pasarela en línea (Wompi).
+- Con dominio propio: correo automático a la clienta en cada cambio de estado.
 
 ## Notas para retomar
 

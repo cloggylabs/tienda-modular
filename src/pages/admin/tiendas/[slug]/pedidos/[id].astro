@@ -1,12 +1,18 @@
 ---
 import AdminLayout from '../../../../../layouts/AdminLayout.astro';
+import Errors from '../../../../../components/admin/Errors.astro';
 import { getDb } from '../../../../../lib/db';
 import { getStoreBySlug, storeLinker } from '../../../../../modules/tiendas/repo';
 import { getOrder, listOrderEvents, listOrderItems, updateOrder } from '../../../../../modules/pedidos/repo';
-import { formatCOP } from '../../../../../modules/catalogo/format';
+import { availableUnits, formatCOP } from '../../../../../modules/catalogo/format';
+import { listProductsByIds } from '../../../../../modules/catalogo/repo';
+import { CARRIER_MAX, TRACKING_MAX, parseShippingForm, type ShippingValues } from '../../../../../modules/pedidos/validate';
 import {
+  CARRIERS,
   ORDER_STATUS_LABELS,
   PAYMENT_STATUS_LABELS,
+  customerChatUrl,
+  customerUpdateMessage,
   formatDateTime,
   formatPhone,
   orderActions,
@@ -37,7 +43,13 @@ const MESSAGES: Record<string, string> = {
   cancel: 'Pedido cancelado.',
   reopen: 'Pedido reabierto.',
   note: 'Nota guardada.',
+  shipping: 'Datos del envío guardados.',
 };
+/** Acciones que cambian lo que ve la clienta: después de ellas se ofrece avisarle por WhatsApp. */
+const NOTIFY_AFTER = new Set(['confirm_payment', 'reject_receipt', 'confirm_order', 'prepare', 'ship', 'deliver', 'cancel', 'shipping']);
+
+let errors: string[] = [];
+let shipping: ShippingValues = { carrier: order.carrier, trackingNumber: order.trackingNumber };
 
 if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
@@ -46,26 +58,56 @@ if (Astro.request.method === 'POST') {
     await updateOrder(db, order, { adminNote: String(form.get('adminNote') ?? '').trim().slice(0, 2000) });
     return Astro.redirect(`${self}?ok=note`);
   }
-  // Solo las acciones que permite el estado actual (evita, por ejemplo, confirmar un pedido cancelado).
+  // Transportadora y guía: se piden al marcar «En camino» y se pueden corregir después.
+  const editShipping = action === 'shipping' && (order.status === 'shipped' || order.status === 'delivered');
   const chosen = actions.find((a) => a.action === action);
-  if (chosen) {
+  if (editShipping || chosen?.action === 'ship') {
+    const parsed = parseShippingForm(form);
+    shipping = parsed.values;
+    errors = parsed.errors;
+    if (!errors.length) {
+      await updateOrder(db, order, editShipping ? shipping : { ...chosen!.patch, ...shipping });
+      return Astro.redirect(`${self}?ok=${action}`);
+    }
+  } else if (chosen) {
+    // Solo las acciones que permite el estado actual (evita, por ejemplo, confirmar un pedido cancelado).
     await updateOrder(db, order, chosen.patch);
     return Astro.redirect(`${self}?ok=${chosen.action}`);
+  } else {
+    return Astro.redirect(self);
   }
-  return Astro.redirect(self);
 }
 
 const [items, events] = await Promise.all([listOrderItems(db, order.id), listOrderEvents(db, order.id)]);
+const productIds = [...new Set(items.flatMap((i) => (i.productId ? [i.productId] : [])))];
+const products = new Map((await listProductsByIds(db, store.id, productIds)).map((p) => [p.id, p]));
+// Antes de confirmar: avisa si el stock de hoy no alcanza (al confirmar se descuenta lo que haya).
+const shortages =
+  order.status === 'new'
+    ? items.flatMap((item) => {
+        const product = item.productId ? products.get(item.productId) : undefined;
+        if (!product) return [];
+        const variant = item.variantId ? product.variants.find((v) => v.id === item.variantId) : undefined;
+        if (item.variantId && !variant) return [];
+        const units = availableUnits(product, variant);
+        if (units === null || units >= item.quantity) return [];
+        const label = item.variantName ? `${item.name} (${item.variantName})` : item.name;
+        return [`De «${label}» ${units <= 0 ? 'no queda stock' : `quedan ${units}`} y el pedido lleva ${item.quantity}.`];
+      })
+    : [];
 const steps = orderTimeline(order, events);
 const config = checkoutConfig(store.settings);
 const ok = MESSAGES[Astro.url.searchParams.get('ok') ?? ''] ?? null;
-const firstName = order.customerName.split(' ')[0];
-const chat = `https://wa.me/${order.phone}?text=${encodeURIComponent(
-  `¡Hola ${firstName}! Te escribimos de ${store.name} por tu pedido ${orderCode(order)}.`,
-)}`;
+const okAction = Astro.url.searchParams.get('ok') ?? '';
 const receipt = `${self}/comprobante`;
 const isPdf = order.receiptType === 'application/pdf';
 const publicUrl = (await storeLinker(db, store, Astro.url))(`/pedido/${order.token}`);
+// El botón de WhatsApp lleva el mensaje del estado actual, listo para mandar.
+const chat = customerChatUrl(order, customerUpdateMessage(order, store.name, publicUrl));
+// Tras rechazar un comprobante el pedido sigue «Recibido», pero igual hay que contarle a la clienta.
+const notify = NOTIFY_AFTER.has(okAction) && (order.status !== 'new' || okAction === 'reject_receipt');
+const shippingStep = order.status === 'preparing';
+const hasShipping = order.status === 'shipped' || order.status === 'delivered';
 ---
 
 <AdminLayout title={`Pedido ${orderCode(order)} · ${store.name}`} current={store.slug} section="pedidos">
@@ -84,7 +126,19 @@ const publicUrl = (await storeLinker(db, store, Astro.url))(`/pedido/${order.tok
       }
     </div>
   </div>
-  {ok && <div class="alert ok" role="status">{ok}</div>}
+  {
+    ok && (
+      <div class="alert ok notice" role="status">
+        <span>{ok}</span>
+        {notify && (
+          <a class="button" href={chat} target="_blank" rel="noopener">
+            Avisarle a {order.customerName.split(' ')[0]} por WhatsApp
+          </a>
+        )}
+      </div>
+    )
+  }
+  <Errors errors={errors} />
 
   <section class="card">
     <h2>Seguimiento</h2>
@@ -104,7 +158,37 @@ const publicUrl = (await storeLinker(db, store, Astro.url))(`/pedido/${order.tok
 
   <section class="card">
     <h2>Acciones</h2>
-    <form method="post" class="row">
+    {
+      shortages.length > 0 && (
+        <div class="alert warn" role="note">
+          <strong>El stock no alcanza.</strong>
+          <ul>
+            {shortages.map((s) => (
+              <li>{s}</li>
+            ))}
+          </ul>
+          <span>Al confirmar se descuenta lo que haya. Revisa si puedes hacer las unidades que faltan antes de confirmar.</span>
+        </div>
+      )
+    }
+    <form method="post" class="stack">
+      {
+        shippingStep && (
+          <fieldset class="ship">
+            <legend>Datos del envío</legend>
+            <label class="field">
+              <span>Transportadora</span>
+              <input name="carrier" list="carriers" maxlength={CARRIER_MAX} value={shipping.carrier} autocomplete="off" />
+            </label>
+            <label class="field">
+              <span>Número de guía <small class="muted">(opcional)</small></span>
+              <input name="trackingNumber" maxlength={TRACKING_MAX} value={shipping.trackingNumber} autocomplete="off" />
+            </label>
+            <small class="muted">Se piden al marcar «En camino» y la clienta los ve en la página de su pedido.</small>
+          </fieldset>
+        )
+      }
+      <div class="row">
       {
         actions.map((a, i) => (
           <button
@@ -118,6 +202,7 @@ const publicUrl = (await storeLinker(db, store, Astro.url))(`/pedido/${order.tok
         ))
       }
       <a class="button secondary" href={chat} target="_blank" rel="noopener">Escribirle por WhatsApp</a>
+      </div>
     </form>
     {
       order.paymentMethod === 'transfer' && order.paymentStatus === 'review' && (
@@ -125,6 +210,27 @@ const publicUrl = (await storeLinker(db, store, Astro.url))(`/pedido/${order.tok
       )
     }
   </section>
+
+  {
+    hasShipping && (
+      <form method="post" class="card">
+        <h2>Envío</h2>
+        <div class="ship">
+          <label class="field">
+            <span>Transportadora</span>
+            <input name="carrier" list="carriers" maxlength={CARRIER_MAX} value={shipping.carrier} autocomplete="off" required />
+          </label>
+          <label class="field">
+            <span>Número de guía <small class="muted">(opcional)</small></span>
+            <input name="trackingNumber" maxlength={TRACKING_MAX} value={shipping.trackingNumber} autocomplete="off" />
+          </label>
+        </div>
+        <div class="row">
+          <button class="button secondary" name="action" value="shipping">Guardar datos del envío</button>
+        </div>
+      </form>
+    )
+  }
 
   {
     order.paymentMethod === 'transfer' && (
@@ -168,6 +274,11 @@ const publicUrl = (await storeLinker(db, store, Astro.url))(`/pedido/${order.tok
                   {item.variantName && `${item.variantName} · `}
                   {item.quantity} × {formatCOP(item.unitPrice)}
                 </small>
+                {order.stockApplied && item.stockTaken > 0 && (
+                  <small class:list={['muted', { short: item.stockTaken < item.quantity }]}>
+                    {`${item.stockTaken < item.quantity ? 'Solo se ' : 'Se '}${item.stockTaken === 1 ? 'descontó 1 unidad' : `descontaron ${item.stockTaken} unidades`} del stock${item.stockTaken < item.quantity ? ' (no alcanzó)' : ''}.`}
+                  </small>
+                )}
               </span>
               <span>{formatCOP(item.unitPrice * item.quantity)}</span>
             </li>
@@ -218,12 +329,15 @@ const publicUrl = (await storeLinker(db, store, Astro.url))(`/pedido/${order.tok
     <h2>Nota interna</h2>
     <label class="field">
       <span class="visually-hidden">Nota interna</span>
-      <textarea name="adminNote" maxlength="2000" placeholder="Solo la ves tú: guía de envío, acuerdos con la clienta…">{order.adminNote}</textarea>
+      <textarea name="adminNote" maxlength="2000" placeholder="Solo la ves tú: acuerdos con la clienta, detalles de la personalización…">{order.adminNote}</textarea>
     </label>
     <div class="row">
       <button class="button secondary" name="action" value="note">Guardar nota</button>
     </div>
   </form>
+  <datalist id="carriers">
+    {CARRIERS.map((c) => <option value={c} />)}
+  </datalist>
 </AdminLayout>
 
 <script>
@@ -355,6 +469,36 @@ const publicUrl = (await storeLinker(db, store, Astro.url))(`/pedido/${order.tok
       width: calc(100% - 34px);
       height: 2px;
     }
+  }
+  .notice {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .ship {
+    display: grid;
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .ship legend {
+    margin-bottom: 4px;
+    font-weight: 600;
+  }
+  @media (min-width: 720px) {
+    .ship {
+      grid-template-columns: 1fr 1fr;
+    }
+    .ship legend,
+    .ship > small {
+      grid-column: 1 / -1;
+    }
+  }
+  .short {
+    color: var(--a-err);
   }
   .button.danger {
     border-color: var(--a-err);
