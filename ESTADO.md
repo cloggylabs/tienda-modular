@@ -60,7 +60,7 @@ En producción (Cloudflare, plan gratuito):
 ## Correcciones del 19 de noviembre de 2026
 
 - Comprobante de pago en el panel: se abre en un visor con Descargar, Abrir en pestaña nueva y cerrar (×, Esc o tocando fuera).
-- Checkout en celular: los desplegables (destino y departamento) se ven del mismo alto que los demás campos en iPhone, y la nota «Por confirmar» ya no abre el selector al tocarla.
+- Checkout: el destino de envío se elige con tarjetas (nombre, precio y si admite contra entrega) en vez de un desplegable, que en el emulador de Chrome y con nombres largos se veía mal. El desplegable de departamento tiene el mismo alto que los demás campos en iPhone.
 
 ## Siguiente
 

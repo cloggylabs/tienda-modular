@@ -114,21 +114,29 @@ const anyCod = config.acceptsCod && zones.some((z) => z.cod);
 
             <fieldset>
               <legend class="heading-sm">Envío</legend>
-              <div class="field">
-                <label for="zone">Destino</label>
-                <select class="input" id="zone" name="zone" required data-zone aria-describedby={zones.some((z) => z.cost === null) ? 'zone-hint' : undefined}>
-                  <option value="" disabled selected={!selectedZone}>
-                    Elige el destino
-                  </option>
-                  {zones.map((z) => (
-                    <option value={z.name} selected={z === selectedZone} data-cost={z.cost ?? ''} data-cod={String(config.acceptsCod && z.cod)}>
-                      {z.name} — {shippingLabel(z.cost)}
-                    </option>
-                  ))}
-                </select>
-                {/* La nota va fuera del <label>: dentro, tocarla en el celular abría el selector. */}
-                {zones.some((z) => z.cost === null) && <small id="zone-hint">«Por confirmar»: te decimos el valor del envío por WhatsApp antes de despachar.</small>}
-              </div>
+              {/* Tarjetas en vez de desplegable: se ven igual en todo celular y el precio nunca se corta. */}
+              <fieldset class="zones" aria-describedby={zones.some((z) => z.cost === null) ? 'zone-hint' : undefined}>
+                <legend>Destino</legend>
+                {zones.map((z) => (
+                  <label class="option zone">
+                    <input
+                      type="radio"
+                      name="zone"
+                      value={z.name}
+                      checked={z === selectedZone}
+                      required
+                      data-cost={z.cost ?? ''}
+                      data-cod={String(config.acceptsCod && z.cod)}
+                    />
+                    <span>
+                      <strong>{z.name}</strong>
+                      {anyCod && z.cod && <small>Admite pago contra entrega</small>}
+                    </span>
+                    <span class="cost">{shippingLabel(z.cost)}</span>
+                  </label>
+                ))}
+                {zones.some((z) => z.cost === null) && <small id="zone-hint" class="hint">«Por confirmar»: te decimos el valor del envío por WhatsApp antes de despachar.</small>}
+              </fieldset>
               <div class="pair">
                 <label class="field">
                   <span>Departamento</span>
@@ -232,17 +240,16 @@ const anyCod = config.acceptsCod && zones.some((z) => z.cod);
 <script>
   // Mejora progresiva: el servidor valida todo; esto solo actualiza el resumen y el contra entrega.
   const form = document.getElementById('checkout') as HTMLFormElement | null;
-  // Sin HTMLSelectElement: sus tipos chocan con los de Workers. Se lee la opción elegida con :checked.
-  const zone = form?.querySelector<HTMLElement>('[data-zone]');
+  const zones = form ? [...form.querySelectorAll<HTMLInputElement>('input[name=zone]')] : [];
   const shipping = form?.querySelector<HTMLElement>('[data-shipping]');
   const total = form?.querySelector<HTMLElement>('[data-total]');
   const codOption = form?.querySelector<HTMLElement>('[data-cod-option]');
   const cop = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
 
   function update() {
-    if (!zone || !shipping || !total) return;
-    const option = zone.querySelector<HTMLOptionElement>('option:checked');
-    if (!option || !option.value) return;
+    if (!shipping || !total) return;
+    const option = zones.find((z) => z.checked);
+    if (!option) return;
     const raw = option.dataset.cost ?? '';
     const cost = raw === '' ? null : Number(raw);
     shipping.textContent = cost === null ? 'Por confirmar' : cost === 0 ? 'Gratis' : cop.format(cost);
@@ -259,7 +266,7 @@ const anyCod = config.acceptsCod && zones.some((z) => z.cod);
       }
     }
   }
-  zone?.addEventListener('change', update);
+  zones.forEach((z) => z.addEventListener('change', update));
   update();
 
   form?.addEventListener('submit', () => {
@@ -332,6 +339,32 @@ const anyCod = config.acceptsCod && zones.some((z) => z.cod);
   }
   .option small {
     font-size: var(--text-caption);
+  }
+  .zones {
+    gap: var(--spacing-8);
+  }
+  .zones legend {
+    margin-bottom: var(--spacing-4);
+    font-weight: var(--font-weight-medium);
+  }
+  .zone {
+    align-items: center;
+    padding: var(--spacing-12) var(--spacing-16);
+  }
+  .zone input {
+    margin-top: 0;
+  }
+  .zone span:not(.cost) {
+    flex: 1;
+    min-width: 0;
+  }
+  .zone .cost {
+    font-weight: var(--font-weight-medium);
+    white-space: nowrap;
+  }
+  .hint {
+    font-size: var(--text-caption);
+    opacity: 0.8;
   }
   .option.off {
     opacity: 0.5;
