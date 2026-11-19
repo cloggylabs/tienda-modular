@@ -187,3 +187,68 @@ export const DEPARTMENTS = [
   'Vaupés',
   'Vichada',
 ] as const;
+
+/** Transportadoras comunes en Colombia: son sugerencias, se puede escribir otra. */
+export const CARRIERS = ['Servientrega', 'Interrapidísimo', 'Coordinadora', 'Envía', 'TCC', 'Deprisa', '4-72', 'Mensajero propio'];
+
+const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? '';
+
+type MessageOrder = Pick<
+  Order,
+  'number' | 'customerName' | 'status' | 'paymentMethod' | 'paymentStatus' | 'carrier' | 'trackingNumber' | 'total' | 'shippingCost'
+>;
+
+/**
+ * Mensaje de WhatsApp con el que la tienda le cuenta a la clienta cómo va su pedido. Depende del estado
+ * actual: el panel lo ofrece después de cada cambio (no hay correo automático sin dominio propio).
+ */
+export function customerUpdateMessage(order: MessageOrder, storeName: string, url: string): string {
+  const name = firstName(order.customerName);
+  const hi = `¡Hola ${name}!`;
+  const code = orderCode(order);
+  const follow = `Puedes ver cómo va tu pedido aquí: ${url}`;
+  const paragraphs: string[] = [];
+  switch (order.status) {
+    case 'new':
+      if (order.paymentStatus === 'rejected') {
+        paragraphs.push(
+          `Hola ${name}. No pudimos verificar el comprobante de pago de tu pedido ${code} en ${storeName}.`,
+          `¿Nos ayudas subiendo uno nuevo? Lo puedes hacer aquí: ${url}`,
+        );
+        return paragraphs.join('\n\n');
+      }
+      paragraphs.push(`${hi} Te escribimos de ${storeName} por tu pedido ${code}.`);
+      break;
+    case 'confirmed':
+      paragraphs.push(
+        `${hi} Confirmamos tu pedido ${code} en ${storeName}${order.paymentMethod === 'transfer' && order.paymentStatus === 'paid' ? ' y recibimos tu pago' : ''}. Ya empezamos a prepararlo.`,
+      );
+      break;
+    case 'preparing':
+      paragraphs.push(`${hi} Tu pedido ${code} de ${storeName} ya está en preparación. Te avisamos apenas salga.`);
+      break;
+    case 'shipped': {
+      const lines = [`${hi} Tu pedido ${code} de ${storeName} va en camino${order.carrier ? ` con ${order.carrier}` : ''}.`];
+      if (order.trackingNumber) lines.push(`Número de guía: ${order.trackingNumber}`);
+      paragraphs.push(lines.join('\n'));
+      if (order.paymentMethod === 'cod' && order.paymentStatus !== 'paid') {
+        paragraphs.push(
+          `Recuerda tener listo el pago en efectivo: ${formatCOP(order.total)}${order.shippingCost === null ? ' más el envío' : ''}.`,
+        );
+      }
+      break;
+    }
+    case 'delivered':
+      paragraphs.push(`${hi} Tu pedido ${code} ya fue entregado. ¡Gracias por comprar en ${storeName}! Esperamos que lo disfrutes.`);
+      return paragraphs.join('\n\n');
+    case 'cancelled':
+      paragraphs.push(`Hola ${name}. Tu pedido ${code} en ${storeName} fue cancelado. Si tienes alguna duda, respóndenos por aquí.`);
+      return paragraphs.join('\n\n');
+  }
+  paragraphs.push(follow);
+  return paragraphs.join('\n\n');
+}
+
+/** Enlace para escribirle a la clienta desde el panel. */
+export const customerChatUrl = (order: Pick<Order, 'phone'>, message: string) =>
+  `https://wa.me/${order.phone}?text=${encodeURIComponent(message)}`;

@@ -13,6 +13,8 @@
   --a-err: #a1261b;
   --a-info-bg: #e8ecff;
   --a-info: #2a3eb1;
+  --a-warn-bg: #fff4dc;
+  --a-warn: #7a4b00;
   --a-radius: 10px;
   color-scheme: light;
 }
@@ -150,6 +152,10 @@ select:focus {
 .alert.error {
   background: var(--a-err-bg);
   color: var(--a-err);
+}
+.alert.warn {
+  background: var(--a-warn-bg);
+  color: var(--a-warn);
 }
 .grid-2 {
   display: grid;

@@ -211,6 +211,11 @@ export const orders = sqliteTable(
     receiptType: text('receipt_type'),
     receiptAt: integer('receipt_at', { mode: 'timestamp' }),
     adminNote: text('admin_note').notNull().default(''),
+    /** Transportadora y número de guía, se piden al marcar «En camino». */
+    carrier: text('carrier').notNull().default(''),
+    trackingNumber: text('tracking_number').notNull().default(''),
+    /** Ya se descontó el stock de sus líneas (al confirmar); se devuelve al cancelar. */
+    stockApplied: integer('stock_applied', { mode: 'boolean' }).notNull().default(false),
     ...timestamps,
   },
   (t) => [
@@ -236,6 +241,8 @@ export const orderItems = sqliteTable(
     unitPrice: integer('unit_price').notNull(),
     quantity: integer('quantity').notNull(),
     image: text('image'),
+    /** Unidades que se descontaron del stock al confirmar (puede ser menos que quantity si no alcanzó). */
+    stockTaken: integer('stock_taken').notNull().default(0),
   },
   (t) => [index('order_items_order_idx').on(t.orderId)],
 );
