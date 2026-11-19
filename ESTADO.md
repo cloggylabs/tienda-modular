@@ -1,6 +1,6 @@
 # Estado del proyecto
 
-Última actualización: 27 de octubre de 2026.
+Última actualización: 18 de noviembre de 2026.
 
 ## Hecho y publicado
 
@@ -9,6 +9,7 @@
 - **Fase 3:** catálogo con productos, variantes, categorías, colecciones por temporada y bloque «Productos» para el inicio.
 - **Fase 4:** carrito, checkout, pedidos y comprobantes de pago (ver README → «Carrito y pedidos»). Publicada el 27 de octubre de 2026.
 - Línea de tiempo de pedidos (Recibido, Confirmado, En preparación, En camino, Entregado, Cancelado) con historial de fechas, y botón para copiar el enlace público de productos y colecciones. Publicado el 27 de octubre de 2026.
+- Enlaces del panel («Ver tienda», «Copiar enlace», página del pedido) con la dirección real de cada tienda en vez de `?tienda=`. En producción, un `?tienda=` de otra tienda redirige a su propia dirección, así que los enlaces de vista previa que ya se compartieron llevan a la tienda correcta. Publicado el 18 de noviembre de 2026.
 
 En producción (Cloudflare, plan gratuito):
 
