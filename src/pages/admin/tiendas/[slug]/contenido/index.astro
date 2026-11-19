@@ -1,7 +1,7 @@
 ---
 import AdminLayout from '../../../../../layouts/AdminLayout.astro';
 import { getDb } from '../../../../../lib/db';
-import { getStoreBySlug } from '../../../../../modules/tiendas/repo';
+import { getStoreBySlug, storeLinker } from '../../../../../modules/tiendas/repo';
 import { BLOCK_LABELS, isPromoActive, type BlockType, type PromoProps } from '../../../../../modules/contenido/blocks';
 import { BLOCK_DEFAULTS } from '../../../../../modules/contenido/fields';
 import {
@@ -16,6 +16,7 @@ import {
 const db = getDb();
 const store = await getStoreBySlug(db, Astro.params.slug!);
 if (!store) return new Response(null, { status: 404 });
+const storeHome = (await storeLinker(db, store, Astro.url))('/');
 const base = `/admin/tiendas/${store.slug}/contenido`;
 
 if (Astro.request.method === 'POST') {
@@ -115,7 +116,7 @@ function promoStatus(props: PromoProps): string | null {
   </form>
 
   <div class="row">
-    <a class="button link" href={`/?tienda=${store.slug}`} target="_blank" rel="noopener">Ver tienda ↗</a>
+    <a class="button link" href={storeHome} target="_blank" rel="noopener">Ver tienda ↗</a>
   </div>
 </AdminLayout>
 

@@ -3,7 +3,7 @@ import AdminLayout from '../../../../../layouts/AdminLayout.astro';
 import Errors from '../../../../../components/admin/Errors.astro';
 import BlockFields from '../../../../../components/admin/BlockFields.astro';
 import { getDb } from '../../../../../lib/db';
-import { getStoreBySlug } from '../../../../../modules/tiendas/repo';
+import { getStoreBySlug, storeLinker } from '../../../../../modules/tiendas/repo';
 import { BLOCK_LABELS } from '../../../../../modules/contenido/blocks';
 import { BLOCK_FIELDS, parseBlockForm } from '../../../../../modules/contenido/fields';
 import { getBlock, updateBlockProps } from '../../../../../modules/contenido/repo';
@@ -14,6 +14,7 @@ const db = getDb();
 const store = await getStoreBySlug(db, Astro.params.slug!);
 const block = store ? await getBlock(db, store.id, Number(Astro.params.id)) : undefined;
 if (!store || !block || !(block.type in BLOCK_FIELDS)) return new Response(null, { status: 404 });
+const storeHome = (await storeLinker(db, store, Astro.url))('/');
 
 const list = `/admin/tiendas/${store.slug}/contenido`;
 let values: Record<string, unknown> = block.props as unknown as Record<string, unknown>;
@@ -67,7 +68,7 @@ const ok = Astro.url.searchParams.has('guardado')
     <BlockFields type={block.type} values={values} media={media} slug={store.slug} refs={refs} />
     <div class="row">
       <button class="button" type="submit">Guardar</button>
-      <a class="button link" href={`/?tienda=${store.slug}`} target="_blank" rel="noopener">Ver tienda ↗</a>
+      <a class="button link" href={storeHome} target="_blank" rel="noopener">Ver tienda ↗</a>
     </div>
   </form>
 </AdminLayout>

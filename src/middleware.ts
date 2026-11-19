@@ -1,7 +1,7 @@
 import { defineMiddleware } from 'astro:middleware';
 import { getSessionUser, SESSION_COOKIE } from './lib/auth';
 import { getDb } from './lib/db';
-import { PREVIEW_COOKIE, PREVIEW_PARAM, resolveStore } from './modules/tiendas/resolve';
+import { PREVIEW_COOKIE, PREVIEW_PARAM, ownAddressFor, resolveStore } from './modules/tiendas/resolve';
 
 const PUBLIC_ADMIN_PATHS = new Set(['/admin/login', '/admin/setup']);
 
@@ -38,7 +38,17 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
 
   // --- Tienda pública ---
   // Vista previa de otra tienda: solo en desarrollo o con sesión en el panel.
-  const requested = ctx.url.searchParams.get(PREVIEW_PARAM) ?? ctx.cookies.get(PREVIEW_COOKIE)?.value;
+  let requested = ctx.url.searchParams.get(PREVIEW_PARAM) ?? ctx.cookies.get(PREVIEW_COOKIE)?.value;
+  // En producción cada tienda tiene su propia dirección: un ?tienda= de otra tienda lleva allá (sirve también
+  // para enlaces de vista previa que ya se compartieron), y una cookie de vista previa vieja se descarta.
+  if (requested && requested !== 'salir' && !import.meta.env.DEV) {
+    const own = await ownAddressFor(db, ctx.url, requested);
+    if (own) {
+      if (ctx.cookies.has(PREVIEW_COOKIE)) ctx.cookies.delete(PREVIEW_COOKIE, { path: '/' });
+      if (ctx.url.searchParams.has(PREVIEW_PARAM)) return ctx.redirect(own, 302);
+      requested = undefined;
+    }
+  }
   let previewSlug: string | undefined;
   if (requested) {
     const allowed =

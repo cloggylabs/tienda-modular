@@ -1,7 +1,7 @@
 ---
 import AdminLayout from '../../../../../layouts/AdminLayout.astro';
 import { getDb } from '../../../../../lib/db';
-import { getStoreBySlug } from '../../../../../modules/tiendas/repo';
+import { getStoreBySlug, storeLinker } from '../../../../../modules/tiendas/repo';
 import { getOrder, listOrderEvents, listOrderItems, updateOrder } from '../../../../../modules/pedidos/repo';
 import { formatCOP } from '../../../../../modules/catalogo/format';
 import {
@@ -65,7 +65,7 @@ const chat = `https://wa.me/${order.phone}?text=${encodeURIComponent(
 )}`;
 const receipt = `${self}/comprobante`;
 const isPdf = order.receiptType === 'application/pdf';
-const publicUrl = `/pedido/${order.token}?tienda=${store.slug}`;
+const publicUrl = (await storeLinker(db, store, Astro.url))(`/pedido/${order.token}`);
 ---
 
 <AdminLayout title={`Pedido ${orderCode(order)} · ${store.name}`} current={store.slug} section="pedidos">

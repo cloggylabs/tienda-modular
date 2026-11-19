@@ -228,7 +228,7 @@ const title = isNew ? 'Nuevo producto' : (existing?.name ?? 'Producto');
       <button class="button" type="submit">{isNew ? 'Crear producto' : 'Guardar'}</button>
       {
         existing?.status === 'active' && (
-          <a class="button link" href={`/producto/${existing.slug}?tienda=${store.slug}`} target="_blank" rel="noopener">
+          <a class="button link" href={publicUrl!} target="_blank" rel="noopener">
             Ver en la tienda ↗
           </a>
         )

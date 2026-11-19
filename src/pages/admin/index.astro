@@ -1,13 +1,15 @@
 ---
 import AdminLayout from '../../layouts/AdminLayout.astro';
+import CopyLink from '../../components/admin/CopyLink.astro';
 import { getDb } from '../../lib/db';
-import { getDomains, listStores } from '../../modules/tiendas/repo';
+import { getDomains, listStores, storeLinker } from '../../modules/tiendas/repo';
 import { newOrderCounts } from '../../modules/pedidos/repo';
 
 const db = getDb();
 const stores = await listStores(db);
 const [domains, pending] = await Promise.all([Promise.all(stores.map((s) => getDomains(db, s.id))), newOrderCounts(db)]);
 const user = Astro.locals.user!;
+const homes = await Promise.all(stores.map(async (s) => (await storeLinker(db, s, Astro.url))('/')));
 ---
 
 <AdminLayout title="Inicio">
@@ -54,9 +56,10 @@ const user = Astro.locals.user!;
             <a class="button secondary" href={`/admin/tiendas/${s.slug}/tema`}>
               Tema
             </a>
-            <a class="button link" href={`/?tienda=${s.slug}`} target="_blank" rel="noopener">
+            <a class="button link" href={homes[i]} target="_blank" rel="noopener">
               Ver tienda ↗
             </a>
+            <CopyLink url={homes[i]} label="Copiar enlace de la tienda" />
           </div>
         </article>
       ))

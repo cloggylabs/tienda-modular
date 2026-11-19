@@ -2,7 +2,7 @@
 import AdminLayout from '../../../../layouts/AdminLayout.astro';
 import Errors from '../../../../components/admin/Errors.astro';
 import { getDb } from '../../../../lib/db';
-import { getDomains, getStoreBySlug, parseDomains, setDomains, updateGeneral } from '../../../../modules/tiendas/repo';
+import { getDomains, getStoreBySlug, parseDomains, setDomains, updateGeneral, storeLinker } from '../../../../modules/tiendas/repo';
 import {
   MAX_SHIPPING_ZONES,
   PAYMENT_OPTIONS,
@@ -17,6 +17,7 @@ import { formatCOP } from '../../../../modules/catalogo/format';
 const db = getDb();
 const store = await getStoreBySlug(db, Astro.params.slug!);
 if (!store) return new Response(null, { status: 404 });
+const storeHome = (await storeLinker(db, store, Astro.url))('/');
 
 const NAV_ROWS = 5;
 let errors: string[] = [];
@@ -253,7 +254,7 @@ const navRows = Array.from({ length: NAV_ROWS }, (_, i) => values.settings.nav[i
 
     <div class="row">
       <button class="button" type="submit">Guardar cambios</button>
-      <a class="button link" href={`/?tienda=${store.slug}`} target="_blank" rel="noopener">Ver tienda ↗</a>
+      <a class="button link" href={storeHome} target="_blank" rel="noopener">Ver tienda ↗</a>
     </div>
   </form>
 </AdminLayout>

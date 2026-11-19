@@ -1,7 +1,7 @@
 ---
 import '../styles/admin.css';
 import { getDb } from '../lib/db';
-import { listStores } from '../modules/tiendas/repo';
+import { listStores, storeLinker } from '../modules/tiendas/repo';
 import { newOrderCounts } from '../modules/pedidos/repo';
 
 interface Props {
@@ -14,6 +14,9 @@ const { title, current, section } = Astro.props;
 const user = Astro.locals.user!;
 const db = getDb();
 const [stores, pending] = await Promise.all([listStores(db), newOrderCounts(db)]);
+const homes = new Map(
+  await Promise.all(stores.map(async (s) => [s.slug, (await storeLinker(db, s, Astro.url))('/')] as const)),
+);
 ---
 
 <!doctype html>
@@ -80,7 +83,7 @@ const [stores, pending] = await Promise.all([listStores(db), newOrderCounts(db)]
                       </a>
                     </li>
                     <li>
-                      <a href={`/?tienda=${s.slug}`} target="_blank" rel="noopener">
+                      <a href={homes.get(s.slug)} target="_blank" rel="noopener">
                         Ver tienda ↗
                       </a>
                     </li>

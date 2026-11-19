@@ -108,7 +108,7 @@ const title = isNew ? 'Nueva colección' : (existing?.name ?? 'Colección');
       <button class="button" type="submit">{isNew ? 'Crear colección' : 'Guardar'}</button>
       {
         existing && collectionStatus(existing) === 'Activa' && (
-          <a class="button link" href={`/coleccion/${existing.slug}?tienda=${store.slug}`} target="_blank" rel="noopener">
+          <a class="button link" href={publicUrl!} target="_blank" rel="noopener">
             Ver en la tienda ↗
           </a>
         )

@@ -6,6 +6,7 @@ import { env } from 'cloudflare:workers';
 import { eq } from 'drizzle-orm';
 import { storeDomains, stores, type Store } from '../../db/schema';
 import type { Db } from '../../lib/db';
+import { storeLinker } from './repo';
 
 export const PREVIEW_PARAM = 'tienda';
 export const PREVIEW_COOKIE = 'tm_vista_tienda';
@@ -22,6 +23,21 @@ export async function findStoreByHostname(db: Db, hostname: string): Promise<Sto
     .where(eq(storeDomains.hostname, hostname.toLowerCase()))
     .get();
   return row?.store;
+}
+
+/**
+ * Si la tienda pedida con ?tienda= (o la cookie de vista previa) tiene su propia dirección en otro dominio,
+ * devuelve esa dirección para redirigir. Así un enlace de vista previa compartido por error
+ * (artelicat…/?tienda=pochi-craft-3d) lleva a la tienda correcta y no a la del dominio actual.
+ */
+export async function ownAddressFor(db: Db, url: URL, slug: string): Promise<string | undefined> {
+  const store = await findStoreBySlug(db, slug);
+  if (!store) return undefined;
+  const params = new URLSearchParams(url.search);
+  params.delete(PREVIEW_PARAM);
+  const query = params.size ? `?${params}` : '';
+  const target = new URL((await storeLinker(db, store, url))(url.pathname + query));
+  return target.origin === url.origin ? undefined : target.href;
 }
 
 export async function resolveStore(db: Db, url: URL, previewSlug: string | undefined): Promise<Store | undefined> {
